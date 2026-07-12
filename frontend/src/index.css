@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface text-slateDark font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading text-nav;
+  }
+}
+
+@layer components {
+  /* Navigation */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-slateLight hover:text-white hover:bg-slateDark;
+  }
+  .nav-item.active {
+    @apply bg-accent/10 text-accent hover:bg-accent/20;
+  }
+
+  /* Cards */
+  .kpi-card {
+    @apply bg-white p-5 rounded-xl border border-slate-100 shadow-card hover:shadow-float transition-shadow duration-300;
+  }
+  
+  .data-card {
+    @apply bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-medium text-sm hover:bg-accentHover transition-colors focus:ring-2 focus:ring-accent/50 focus:outline-none;
+  }
+  
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-slateDark border border-slate-200 rounded-lg font-medium text-sm hover:bg-slate-50 hover:text-nav transition-colors focus:ring-2 focus:ring-slate-200 focus:outline-none;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-danger text-white rounded-lg font-medium text-sm hover:bg-red-600 transition-colors focus:ring-2 focus:ring-danger/50 focus:outline-none;
+  }
+
+  /* Forms */
+  .form-label {
+    @apply block text-sm font-medium text-slateDark mb-1.5;
+  }
+  
+  .form-input {
+    @apply w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-nav placeholder-slateLight focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none transition-all;
+  }
+
+  /* Status Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-medium;
+  }
+  
+  .badge-success {
+    @apply bg-emerald-100 text-emerald-800 border border-emerald-200;
+  }
+  
+  .badge-warning {
+    @apply bg-amber-100 text-amber-800 border border-amber-200;
+  }
+  
+  .badge-danger {
+    @apply bg-red-100 text-red-800 border border-red-200;
+  }
+  
+  .badge-info {
+    @apply bg-sky-100 text-sky-800 border border-sky-200;
+  }
+  
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-800 border border-slate-200;
+  }
+}

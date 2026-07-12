@@ -2,152 +2,152 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  ArrowRightLeft, CheckCircle2, Clock, Plus, UserCheck, 
-  AlertCircle, X, Loader2, Calendar, ShieldCheck
+  ArrowRightLeft, CheckCircle2, History, AlertTriangle, 
+  UserCheck, Send, Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-interface Allocation {
+interface Asset {
   id: number;
-  asset_id: number;
-  user_id: number;
-  department_id: number;
-  allocated_at: string;
-  expected_return_date: string | null;
-  status: 'active' | 'returned' | 'overdue';
-  condition_notes: string | null;
-  asset: { id: number; name: string; asset_tag: string };
-  user: { id: number; full_name: string; email: string };
+  name: string;
+  asset_tag: string;
+  status: string;
 }
 
-interface Transfer {
+interface User {
   id: number;
-  asset_id: number;
-  from_user_id: number;
-  to_user_id: number;
-  requested_at: string;
-  status: 'requested' | 'approved' | 'rejected' | 'cancelled';
-  notes: string | null;
-  asset: { name: string; asset_tag: string };
-  from_user: { full_name: string; email: string };
-  to_user: { full_name: string; email: string };
+  full_name: string;
+  department?: { id: number; name: string };
+}
+
+interface AllocationHistory {
+  id: number;
+  allocated_at: string;
+  returned_at: string | null;
+  status: string;
+  condition_notes: string | null;
+  user: { full_name: string; email: string };
 }
 
 export default function Allocations() {
   const { user } = useAuth();
-  const [allocations, setAllocations] = useState<Allocation[]>([]);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'allocations' | 'transfers'>('allocations');
-
-  // Modals state
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [selectedAlloc, setSelectedAlloc] = useState<Allocation | null>(null);
-
-  // Form states
-  const [availableAssets, setAvailableAssets] = useState<{ id: number; name: string; asset_tag: string }[]>([]);
-  const [usersList, setUsersList] = useState<{ id: number; full_name: string; department_id: number }[]>([]);
-  const [assetId, setAssetId] = useState<number>(0);
-  const [userId, setUserId] = useState<number>(0);
-  const [expectedDate, setExpectedDate] = useState('');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [usersList, setUsersList] = useState<User[]>([]);
+  
+  const [selectedAssetId, setSelectedAssetId] = useState<number | ''>('');
+  const [assetHistory, setAssetHistory] = useState<AllocationHistory[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // Forms state
+  const [assignUserId, setAssignUserId] = useState<number | ''>('');
   const [transferNotes, setTransferNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [allocRes, transRes] = await Promise.all([
-        api.get('/allocations/'),
-        api.get('/allocations/transfers/list')
-      ]);
-      setAllocations(allocRes.data);
-      setTransfers(transRes.data);
-    } catch (err) {
-      console.error('Failed to load allocations data', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  
+  // Conflict state
+  const [conflictData, setConflictData] = useState<{ holder_name: string; dept_name: string } | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    fetchData();
+    const fetchInitialData = async () => {
+      try {
+        const [assetsRes, usersRes] = await Promise.all([
+          api.get('/assets/'),
+          api.get('/users/')
+        ]);
+        setAssets(assetsRes.data);
+        setUsersList(usersRes.data);
+      } catch (err) {
+        console.error('Failed to load initial data', err);
+      }
+    };
+    fetchInitialData();
   }, []);
 
-  const openAssignModal = async () => {
-    setIsAssignModalOpen(true);
-    try {
-      const [assetsRes, usersRes] = await Promise.all([
-        api.get('/assets/?status=available'),
-        api.get('/users/')
-      ]);
-      setAvailableAssets(assetsRes.data);
-      setUsersList(usersRes.data);
-      if (assetsRes.data.length > 0) setAssetId(assetsRes.data[0].id);
-      if (usersRes.data.length > 0) setUserId(usersRes.data[0].id);
-    } catch (err) {
-      console.error('Failed to prepare assignment modal', err);
+  // When asset is selected, fetch its history and check availability
+  useEffect(() => {
+    if (!selectedAssetId) {
+      setAssetHistory([]);
+      setConflictData(null);
+      setSuccessMsg('');
+      return;
     }
-  };
+    
+    const fetchAssetInfo = async () => {
+      setLoadingHistory(true);
+      setConflictData(null);
+      setSuccessMsg('');
+      try {
+        const historyRes = await api.get(`/assets/${selectedAssetId}/history`);
+        setAssetHistory(historyRes.data);
+        
+        // Find current active allocation if any
+        const activeAlloc = historyRes.data.find((h: any) => h.status === 'active');
+        if (activeAlloc) {
+          setConflictData({
+            holder_name: activeAlloc.user.full_name,
+            dept_name: 'Unknown Dept' // If available in API, use it. But for now, fallback
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch asset history', err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    fetchAssetInfo();
+  }, [selectedAssetId]);
 
-  const handleAssign = async (e: React.FormEvent) => {
+  const handleAllocate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedAssetId || !assignUserId) return;
     setSubmitting(true);
+    setSuccessMsg('');
+    
     try {
-      const targetUser = usersList.find(u => u.id === Number(userId));
       await api.post('/allocations/', {
-        asset_id: Number(assetId),
-        user_id: Number(userId),
-        department_id: targetUser?.department_id || 1,
-        expected_return_date: expectedDate ? new Date(expectedDate).toISOString() : null,
-        condition_notes: 'Initial assignment'
+        asset_id: Number(selectedAssetId),
+        user_id: Number(assignUserId),
+        department_id: null,
+        expected_return_date: null,
+        condition_notes: 'Direct allocation'
       });
-      setIsAssignModalOpen(false);
-      fetchData();
-    } catch (err) {
-      console.error('Failed to create allocation', err);
+      setSuccessMsg('Asset allocated successfully!');
+      // Refresh history
+      const historyRes = await api.get(`/assets/${selectedAssetId}/history`);
+      setAssetHistory(historyRes.data);
+      const activeAlloc = historyRes.data.find((h: any) => h.status === 'active');
+      if (activeAlloc) {
+        setConflictData({ holder_name: activeAlloc.user.full_name, dept_name: 'Unknown Dept' });
+      }
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        const detail = err.response.data.detail;
+        setConflictData({
+          holder_name: detail.current_holder || 'Unknown',
+          dept_name: 'Department'
+        });
+      } else {
+        console.error('Failed to allocate', err);
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleReturn = async (allocationId: number) => {
-    if (!window.confirm('Mark this asset as returned to inventory?')) return;
-    try {
-      await api.post(`/allocations/${allocationId}/return`, {
-        condition_notes: 'Returned in working condition'
-      });
-      fetchData();
-    } catch (err) {
-      console.error('Failed to return asset', err);
-    }
-  };
-
-  const openTransferModal = async (alloc: Allocation) => {
-    setSelectedAlloc(alloc);
-    setIsTransferModalOpen(true);
-    try {
-      const usersRes = await api.get('/users/');
-      setUsersList(usersRes.data.filter((u: any) => u.id !== alloc.user_id));
-      if (usersRes.data.length > 0) setUserId(usersRes.data[0].id);
-    } catch (err) {
-      console.error('Failed to prepare transfer modal', err);
-    }
-  };
-
-  const handleRequestTransfer = async (e: React.FormEvent) => {
+  const handleTransferRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAlloc) return;
+    if (!selectedAssetId || !assignUserId) return;
     setSubmitting(true);
+    setSuccessMsg('');
+    
     try {
-      await api.post('/allocations/transfers/request', {
-        asset_id: selectedAlloc.asset_id,
-        to_user_id: Number(userId),
+      await api.post('/allocations/transfers', {
+        asset_id: Number(selectedAssetId),
+        to_user_id: Number(assignUserId),
         notes: transferNotes
       });
-      setIsTransferModalOpen(false);
+      setSuccessMsg('Transfer request submitted successfully!');
       setTransferNotes('');
-      fetchData();
     } catch (err) {
       console.error('Failed to request transfer', err);
     } finally {
@@ -155,319 +155,207 @@ export default function Allocations() {
     }
   };
 
-  const handleTransferDecision = async (transferId: number, status: 'approved' | 'rejected') => {
-    try {
-      await api.put(`/allocations/transfers/${transferId}`, { status });
-      fetchData();
-    } catch (err) {
-      console.error('Failed to process transfer decision', err);
-    }
-  };
-
-  const canManage = user?.role === 'admin' || user?.role === 'asset_manager';
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 page-enter max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Allocations & Transfers</h1>
-          <p className="text-baseSlate text-sm">Assign asset custody, track checkouts, and approve employee peer transfers.</p>
+          <h1 className="page-title">Asset Allocation & Transfer</h1>
+          <p className="page-subtitle">Assign custody, resolve conflicts, and view chronological history.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left Column: Asset Selection & Form */}
+        <div className="space-y-6">
+          <div className="data-card p-6">
+            <h2 className="text-lg font-semibold text-textPrimary mb-4">Select Asset</h2>
+            <div className="form-group mb-4">
+              <label className="form-label">Search & Select Asset</label>
+              <select 
+                className="form-select"
+                value={selectedAssetId}
+                onChange={e => setSelectedAssetId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                <option value="">-- Choose an asset --</option>
+                {assets.map(a => (
+                  <option key={a.id} value={a.id}>{a.asset_tag} — {a.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedAssetId !== '' && (
+              <div className="mt-6 pt-6 border-t border-borderBase animate-fade-in">
+                {conflictData ? (
+                  <div className="space-y-4">
+                    {/* High-visibility alert block */}
+                    <div className="p-4 bg-dangerLight border border-danger/30 rounded-xl flex items-start gap-3">
+                      <AlertTriangle size={20} className="text-danger shrink-0 mt-0.5" />
+                      <div>
+                        <h3 className="text-sm font-semibold text-danger">Conflict Detected</h3>
+                        <p className="text-sm text-danger/90 mt-1">
+                          Already Allocated to <strong>{conflictData.holder_name}</strong>. 
+                          Direct re-allocation is blocked - submit a transfer request below.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Transfer Request Form */}
+                    <form onSubmit={handleTransferRequest} className="space-y-4 bg-surfaceCard p-4 rounded-xl border border-borderBase">
+                      <h4 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
+                        <ArrowRightLeft size={16} className="text-accent" />
+                        Transfer Request
+                      </h4>
+                      <div className="form-group">
+                        <label className="form-label">From (Current Holder)</label>
+                        <input 
+                          type="text" 
+                          className="form-input bg-surfaceHover text-textSecondary cursor-not-allowed" 
+                          value={conflictData.holder_name} 
+                          disabled 
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">To (New Employee)</label>
+                        <select 
+                          className="form-select"
+                          value={assignUserId}
+                          onChange={e => setAssignUserId(Number(e.target.value))}
+                          required
+                        >
+                          <option value="">-- Select employee --</option>
+                          {usersList.map(u => (
+                            <option key={u.id} value={u.id}>{u.full_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Reason</label>
+                        <textarea 
+                          rows={3}
+                          className="form-input"
+                          placeholder="Why is this transfer needed?"
+                          value={transferNotes}
+                          onChange={e => setTransferNotes(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <button type="submit" disabled={submitting} className="btn-primary w-full">
+                        {submitting && <Loader2 size={16} className="animate-spin" />}
+                        <Send size={16} />
+                        Submit Request
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <form onSubmit={handleAllocate} className="space-y-4">
+                    <div className="form-group">
+                      <label className="form-label">Assign To</label>
+                      <select 
+                        className="form-select"
+                        value={assignUserId}
+                        onChange={e => setAssignUserId(Number(e.target.value))}
+                        required
+                      >
+                        <option value="">-- Select employee --</option>
+                        {usersList.map(u => (
+                          <option key={u.id} value={u.id}>{u.full_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button type="submit" disabled={submitting} className="btn-primary w-full">
+                      {submitting && <Loader2 size={16} className="animate-spin" />}
+                      <UserCheck size={16} />
+                      Allocate Asset
+                    </button>
+                  </form>
+                )}
+
+                {successMsg && (
+                  <div className="mt-4 p-3 bg-successLight text-success text-sm font-medium rounded-xl flex items-center gap-2">
+                    <CheckCircle2 size={16} />
+                    {successMsg}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {canManage && (
-          <button onClick={openAssignModal} className="btn-primary self-start">
-            <Plus size={16} />
-            New Assignment
-          </button>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6">
-        <button
-          onClick={() => setActiveTab('allocations')}
-          className={`pb-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === 'allocations' 
-              ? 'border-accent text-accent' 
-              : 'border-transparent text-baseSlate hover:text-nav'
-          }`}
-        >
-          <UserCheck size={16} />
-          Active Allocations ({allocations.filter(a => a.status !== 'returned').length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transfers')}
-          className={`pb-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === 'transfers' 
-              ? 'border-accent text-accent' 
-              : 'border-transparent text-baseSlate hover:text-nav'
-          }`}
-        >
-          <ArrowRightLeft size={16} />
-          Transfer Requests ({transfers.filter(t => t.status === 'requested').length})
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="data-card">
-        {loading ? (
-          <div className="p-12 text-center text-baseSlate">Loading data...</div>
-        ) : activeTab === 'allocations' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-baseSlate font-medium border-b border-slate-200">
-                <tr>
-                  <th className="px-5 py-3.5">Asset</th>
-                  <th className="px-5 py-3.5">Assigned To</th>
-                  <th className="px-5 py-3.5">Allocated On</th>
-                  <th className="px-5 py-3.5">Expected Return</th>
-                  <th className="px-5 py-3.5">Status</th>
-                  <th className="px-5 py-3.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {allocations.map((alloc) => (
-                  <tr key={alloc.id} className="hover:bg-slate-50/60">
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-nav">{alloc.asset.name}</div>
-                      <div className="font-mono text-xs text-accent font-semibold">{alloc.asset.asset_tag}</div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-nav">{alloc.user.full_name}</div>
-                      <div className="text-xs text-slateLight">{alloc.user.email}</div>
-                    </td>
-                    <td className="px-5 py-4 text-baseSlate">
-                      {format(parseISO(alloc.allocated_at), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-5 py-4 text-baseSlate">
-                      {alloc.expected_return_date ? (
-                        <div className="flex items-center gap-1">
-                          <Calendar size={14} className="text-slateLight" />
-                          {format(parseISO(alloc.expected_return_date), 'MMM d, yyyy')}
-                        </div>
-                      ) : 'Indefinite'}
-                    </td>
-                    <td className="px-5 py-4">
-                      {alloc.status === 'active' ? (
-                        <span className="badge badge-success">Active</span>
-                      ) : alloc.status === 'overdue' ? (
-                        <span className="badge badge-danger">Overdue</span>
-                      ) : (
-                        <span className="badge badge-neutral">Returned</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-right space-x-2">
-                      {alloc.status !== 'returned' && (
-                        <>
-                          <button 
-                            onClick={() => openTransferModal(alloc)}
-                            className="btn-secondary py-1 text-xs"
-                          >
-                            Transfer
-                          </button>
-                          {canManage && (
-                            <button 
-                              onClick={() => handleReturn(alloc.id)}
-                              className="btn-primary py-1 text-xs bg-slateDark hover:bg-nav"
-                            >
-                              Log Return
-                            </button>
+        {/* Right Column: Allocation History Timeline */}
+        <div className="space-y-6">
+          <div className="data-card p-6 h-full flex flex-col">
+            <h2 className="text-lg font-semibold text-textPrimary mb-4 flex items-center gap-2">
+              <History size={18} className="text-accent" />
+              Allocation History
+            </h2>
+            
+            <div className="flex-1 overflow-y-auto">
+              {!selectedAssetId ? (
+                <div className="empty-state py-12">
+                  <div className="empty-state-icon">
+                    <ArrowRightLeft size={24} />
+                  </div>
+                  <p className="text-sm text-textMuted">Select an asset to view its history.</p>
+                </div>
+              ) : loadingHistory ? (
+                <div className="space-y-4 pt-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex gap-4">
+                      <div className="w-px bg-borderBase relative">
+                        <div className="absolute -left-1 top-1 w-2.5 h-2.5 rounded-full bg-borderBase"></div>
+                      </div>
+                      <div className="flex-1 pb-4">
+                        <div className="skeleton h-4 w-32 mb-2 rounded-md"></div>
+                        <div className="skeleton h-3 w-48 rounded-md"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : assetHistory.length === 0 ? (
+                <p className="text-sm text-textMuted">No allocation history for this asset.</p>
+              ) : (
+                <div className="space-y-0 pl-1">
+                  {assetHistory.map((history, idx) => {
+                    const isLast = idx === assetHistory.length - 1;
+                    return (
+                      <div key={history.id} className="flex gap-4 relative">
+                        {/* Timeline line */}
+                        {!isLast && (
+                          <div className="absolute top-2 bottom-[-1rem] left-[5px] w-px bg-borderBase"></div>
+                        )}
+                        {/* Timeline dot */}
+                        <div className={`mt-1.5 w-3 h-3 rounded-full shrink-0 relative z-10 ${
+                          history.status === 'active' ? 'bg-success shadow-glow' : 'bg-borderStrong'
+                        }`}></div>
+                        
+                        <div className="flex-1 pb-6">
+                          <div className="text-sm font-medium text-textPrimary">
+                            {format(parseISO(history.allocated_at), 'MMM dd')} - Allocated to {history.user.full_name}
+                          </div>
+                          {history.returned_at && (
+                            <div className="text-sm text-textSecondary mt-1">
+                              {format(parseISO(history.returned_at), 'MMM dd')} - Returned by {history.user.full_name}
+                              {history.condition_notes && (
+                                <span className="italic text-textMuted ml-1">- condition: {history.condition_notes}</span>
+                              )}
+                            </div>
                           )}
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          <div className="mt-1">
+                            <span className={`badge ${history.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>
+                              {history.status.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-baseSlate font-medium border-b border-slate-200">
-                <tr>
-                  <th className="px-5 py-3.5">Asset</th>
-                  <th className="px-5 py-3.5">Current Holder</th>
-                  <th className="px-5 py-3.5">Requested Recipient</th>
-                  <th className="px-5 py-3.5">Notes</th>
-                  <th className="px-5 py-3.5">Status</th>
-                  <th className="px-5 py-3.5 text-right">Approval</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {transfers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-baseSlate">No pending transfer requests.</td>
-                  </tr>
-                ) : transfers.map((transfer) => (
-                  <tr key={transfer.id} className="hover:bg-slate-50/60">
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-nav">{transfer.asset.name}</div>
-                      <div className="font-mono text-xs text-accent font-semibold">{transfer.asset.asset_tag}</div>
-                    </td>
-                    <td className="px-5 py-4 font-medium text-nav">
-                      {transfer.from_user.full_name}
-                    </td>
-                    <td className="px-5 py-4 font-medium text-accent">
-                      {transfer.to_user.full_name}
-                    </td>
-                    <td className="px-5 py-4 text-xs text-baseSlate max-w-xs truncate">
-                      {transfer.notes || 'None provided'}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`badge ${
-                        transfer.status === 'requested' ? 'badge-warning' :
-                        transfer.status === 'approved' ? 'badge-success' : 'badge-danger'
-                      }`}>
-                        {transfer.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right space-x-2">
-                      {transfer.status === 'requested' && canManage && (
-                        <>
-                          <button 
-                            onClick={() => handleTransferDecision(transfer.id, 'approved')}
-                            className="btn-primary py-1 text-xs bg-success hover:bg-emerald-600"
-                          >
-                            Approve
-                          </button>
-                          <button 
-                            onClick={() => handleTransferDecision(transfer.id, 'rejected')}
-                            className="btn-secondary py-1 text-xs text-danger hover:bg-red-50"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
       </div>
-
-      {/* Assign Modal */}
-      {isAssignModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-float max-w-md w-full overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-surface">
-              <h3 className="font-semibold text-lg">Assign Asset Custody</h3>
-              <button onClick={() => setIsAssignModalOpen(false)} className="text-slateLight hover:text-nav">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAssign} className="p-5 space-y-4">
-              <div>
-                <label className="form-label">Available Asset</label>
-                <select 
-                  className="form-input font-mono text-sm"
-                  value={assetId}
-                  onChange={e => setAssetId(Number(e.target.value))}
-                >
-                  {availableAssets.length === 0 ? (
-                    <option value={0}>No assets currently available</option>
-                  ) : availableAssets.map(a => (
-                    <option key={a.id} value={a.id}>{a.asset_tag} — {a.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="form-label">Assignee Employee</label>
-                <select 
-                  className="form-input"
-                  value={userId}
-                  onChange={e => setUserId(Number(e.target.value))}
-                >
-                  {usersList.map(u => (
-                    <option key={u.id} value={u.id}>{u.full_name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="form-label">Expected Return Date (Optional)</label>
-                <input 
-                  type="date" 
-                  className="form-input"
-                  value={expectedDate}
-                  onChange={e => setExpectedDate(e.target.value)}
-                />
-              </div>
-
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAssignModalOpen(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting || availableAssets.length === 0} className="btn-primary">
-                  {submitting && <Loader2 size={16} className="animate-spin mr-1" />}
-                  Confirm Assignment
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Transfer Request Modal */}
-      {isTransferModalOpen && selectedAlloc && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-float max-w-md w-full overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-surface">
-              <h3 className="font-semibold text-lg">Request Asset Transfer</h3>
-              <button onClick={() => setIsTransferModalOpen(false)} className="text-slateLight hover:text-nav">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleRequestTransfer} className="p-5 space-y-4">
-              <div className="p-3 bg-slate-50 rounded-lg text-sm border border-slate-100">
-                <span className="text-xs text-slateLight block">Asset Being Transferred</span>
-                <span className="font-mono text-accent font-semibold">{selectedAlloc.asset.asset_tag}</span> — {selectedAlloc.asset.name}
-              </div>
-
-              <div>
-                <label className="form-label">Transfer To Colleague</label>
-                <select 
-                  className="form-input"
-                  value={userId}
-                  onChange={e => setUserId(Number(e.target.value))}
-                >
-                  {usersList.map(u => (
-                    <option key={u.id} value={u.id}>{u.full_name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="form-label">Transfer Rationale</label>
-                <textarea 
-                  rows={3}
-                  placeholder="Explain why custody is being shifted..."
-                  className="form-input"
-                  value={transferNotes}
-                  onChange={e => setTransferNotes(e.target.value)}
-                />
-              </div>
-
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsTransferModalOpen(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting} className="btn-primary">
-                  {submitting && <Loader2 size={16} className="animate-spin mr-1" />}
-                  Submit Request
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

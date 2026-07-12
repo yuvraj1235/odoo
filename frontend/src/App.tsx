@@ -17,7 +17,19 @@ function ProtectedRoute() {
   const { isAuthenticated, isLoading } = useAuth();
   
   if (isLoading) {
-    return <div className="min-h-screen bg-nav flex items-center justify-center text-accent">Loading...</div>;
+    return (
+      <div className="min-h-dvh bg-nav flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center animate-pulse">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/>
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+            <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/>
+            <path d="M2 7h20"/>
+          </svg>
+        </div>
+        <p className="text-white/40 text-sm font-medium">Loading AssetFlow…</p>
+      </div>
+    );
   }
   
   if (!isAuthenticated) {

@@ -49,6 +49,9 @@ export default function OrgSetup() {
   const [deptName, setDeptName] = useState('');
   const [catName, setCatName] = useState('');
   const [catDesc, setCatDesc] = useState('');
+  const [customFieldsList, setCustomFieldsList] = useState<{ key: string; type: string }[]>([]);
+  const [cfKey, setCfKey] = useState('');
+  const [cfType, setCfType] = useState('string');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
@@ -88,18 +91,33 @@ export default function OrgSetup() {
     }
   };
 
+  const handleAddCustomField = () => {
+    if (!cfKey.trim()) return;
+    setCustomFieldsList([...customFieldsList, { key: cfKey.trim(), type: cfType }]);
+    setCfKey('');
+  };
+
+  const handleRemoveCustomField = (index: number) => {
+    setCustomFieldsList(customFieldsList.filter((_, i) => i !== index));
+  };
+
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const customFieldsMap: Record<string, string> = {};
+      customFieldsList.forEach(item => {
+        customFieldsMap[item.key] = item.type;
+      });
       await api.post('/categories/', {
         name: catName,
         description: catDesc,
-        custom_fields: { "warranty_months": "number" }
+        custom_fields: customFieldsMap
       });
       setIsCatModalOpen(false);
       setCatName('');
       setCatDesc('');
+      setCustomFieldsList([]);
       fetchData();
     } catch (err) {
       console.error('Failed to create category', err);
@@ -277,7 +295,7 @@ export default function OrgSetup() {
                         className="form-input text-xs py-1 w-36"
                         value={u.role}
                         onChange={e => handleUpdateRole(u.id, e.target.value)}
-                        disabled={u.email === 'admin@assetflow.io'}
+                        disabled={u.id === 1 || u.id === user?.id}
                       >
                         <option value="admin">Admin</option>
                         <option value="asset_manager">Asset Manager</option>
@@ -356,6 +374,50 @@ export default function OrgSetup() {
                   onChange={e => setCatDesc(e.target.value)}
                 />
               </div>
+
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <label className="form-label block">Custom Metadata Attributes</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Attribute Key (e.g. warranty_months)" 
+                    className="form-input flex-1 text-xs"
+                    value={cfKey}
+                    onChange={e => setCfKey(e.target.value)}
+                  />
+                  <select 
+                    className="form-input w-28 text-xs"
+                    value={cfType}
+                    onChange={e => setCfType(e.target.value)}
+                  >
+                    <option value="string">String</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="boolean">Boolean</option>
+                  </select>
+                  <button 
+                    type="button" 
+                    onClick={handleAddCustomField}
+                    className="btn-secondary py-1 px-3 text-xs"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {customFieldsList.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {customFieldsList.map((item, idx) => (
+                      <span key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slateDark rounded-lg text-xs font-mono">
+                        <span>{item.key}: <span className="text-accent">{item.type}</span></span>
+                        <button type="button" onClick={() => handleRemoveCustomField(idx)} className="text-slateLight hover:text-danger">
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={() => setIsCatModalOpen(false)} className="btn-secondary">Cancel</button>
                 <button type="submit" disabled={submitting} className="btn-primary">Create Category</button>

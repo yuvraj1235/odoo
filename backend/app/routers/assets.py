@@ -20,7 +20,7 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 _ASSET_LOAD = [
     selectinload(Asset.category),
-    selectinload(Asset.department),
+    selectinload(Asset.department).selectinload(Department.head),
     selectinload(Asset.allocations).selectinload(Allocation.user),
 ]
 

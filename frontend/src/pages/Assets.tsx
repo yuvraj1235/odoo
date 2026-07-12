@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  Search, Filter, Plus, Package, MapPin, Tag, 
-  CheckCircle, Clock, AlertTriangle, X, History, 
-  Building2, User as UserIcon, Loader2
+import {
+  Search, Filter, Plus, Package, MapPin,
+  CheckCircle, Clock, AlertTriangle, X, History,
+  User as UserIcon, Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -22,8 +22,8 @@ interface Asset {
   acquisition_date: string;
   acquisition_cost: number | null;
   notes: string | null;
-  category: { id: number; name: string };
-  department: { id: number; name: string } | null;
+  category?: { id: number; name: string } | null;
+  department?: { id: number; name: string } | null;
   current_holder?: { id: number; full_name: string; email: string } | null;
 }
 
@@ -36,20 +36,50 @@ interface AllocationHistory {
   user: { full_name: string; email: string };
 }
 
+function SkeletonTableRow() {
+  return (
+    <tr>
+      <td className="px-5 py-4">
+        <div className="space-y-1.5">
+          <div className="skeleton h-3.5 w-36 rounded-md" />
+          <div className="skeleton h-2.5 w-24 rounded-md" />
+        </div>
+      </td>
+      <td className="px-5 py-4"><div className="skeleton h-3 w-20 rounded-md" /></td>
+      <td className="px-5 py-4"><div className="skeleton h-3 w-16 rounded-md" /></td>
+      <td className="px-5 py-4"><div className="skeleton h-5 w-20 rounded-full" /></td>
+      <td className="px-5 py-4"><div className="skeleton h-3 w-24 rounded-md" /></td>
+      <td className="px-5 py-4 text-right"><div className="skeleton h-3 w-16 rounded-md ml-auto" /></td>
+    </tr>
+  );
+}
+
+function getStatusBadge(status: string) {
+  switch (status) {
+    case 'available':        return <span className="badge badge-success"><CheckCircle size={11} />Available</span>;
+    case 'allocated':        return <span className="badge badge-info"><UserIcon size={11} />Allocated</span>;
+    case 'under_maintenance': return <span className="badge badge-warning"><Clock size={11} />Maintenance</span>;
+    case 'reserved':         return <span className="badge badge-accent">Reserved</span>;
+    case 'lost':             return <span className="badge badge-danger"><AlertTriangle size={11} />Lost</span>;
+    default:                 return <span className="badge badge-neutral capitalize">{status.replace(/_/g, ' ')}</span>;
+  }
+}
+
 export default function Assets() {
   const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [history, setHistory] = useState<AllocationHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
 
   // New asset form state
   const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState<number>(1);
+  const [categoryId, setCategoryId] = useState<number>(0);
   const [location, setLocation] = useState('');
   const [cost, setCost] = useState('');
   const [creating, setCreating] = useState(false);
@@ -60,18 +90,23 @@ export default function Assets() {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (statusFilter) params.append('status', statusFilter);
-      const res = await api.get(`/assets/?${params.toString()}`);
+      const [res, catRes] = await Promise.all([
+        api.get(`/assets/?${params.toString()}`),
+        api.get('/categories/')
+      ]);
       setAssets(res.data);
+      setCategories(catRes.data);
+      if (catRes.data.length > 0 && !categoryId) {
+        setCategoryId(catRes.data[0].id);
+      }
     } catch (err) {
-      console.error('Failed to fetch assets', err);
+      console.error('Failed to fetch assets or categories', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchAssets();
-  }, [statusFilter]);
+  useEffect(() => { fetchAssets(); }, [statusFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,18 +131,12 @@ export default function Assets() {
     setCreating(true);
     try {
       await api.post('/assets/', {
-        name,
-        category_id: categoryId,
-        location,
+        name, category_id: categoryId, location,
         acquisition_cost: cost ? parseFloat(cost) : null,
-        condition: 'new',
-        status: 'available',
-        is_bookable: false
+        condition: 'new', status: 'available', is_bookable: false
       });
       setIsModalOpen(false);
-      setName('');
-      setLocation('');
-      setCost('');
+      setName(''); setLocation(''); setCost('');
       fetchAssets();
     } catch (err) {
       console.error('Failed to create asset', err);
@@ -116,60 +145,53 @@ export default function Assets() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'available':
-        return <span className="badge badge-success"><CheckCircle size={12} className="mr-1" /> Available</span>;
-      case 'allocated':
-        return <span className="badge badge-info"><UserIcon size={12} className="mr-1" /> Allocated</span>;
-      case 'under_maintenance':
-        return <span className="badge badge-warning"><Clock size={12} className="mr-1" /> Maintenance</span>;
-      default:
-        return <span className="badge badge-neutral capitalize">{status.replace('_', ' ')}</span>;
-    }
-  };
-
   const canRegister = user?.role === 'admin' || user?.role === 'asset_manager';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 page-enter">
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Asset Directory</h1>
-          <p className="text-baseSlate text-sm">Manage, track, and audit organizational hardware and resources.</p>
+          <h1 className="page-title">Asset Directory</h1>
+          <p className="page-subtitle">Manage, track, and audit organisational hardware and resources.</p>
         </div>
-        
         {canRegister && (
           <button onClick={() => setIsModalOpen(true)} className="btn-primary self-start">
-            <Plus size={16} />
+            <Plus size={15} aria-hidden="true" />
             Register Asset
           </button>
         )}
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 justify-between">
+      {/* Filter Bar */}
+      <div className="filter-bar">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 text-slateLight" size={18} />
+            <Search
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none"
+              size={16}
+              aria-hidden="true"
+            />
             <input
-              type="text"
-              placeholder="Search by name, tag, or serial number..."
+              type="search"
+              placeholder="Search by name, tag, or serial…"
               className="form-input pl-10"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
+              aria-label="Search assets"
             />
           </div>
-          <button type="submit" className="btn-secondary">Search</button>
+          <button type="submit" className="btn-secondary shrink-0">Search</button>
         </form>
 
-        <div className="flex items-center gap-2">
-          <Filter size={18} className="text-baseSlate" />
-          <select 
-            className="form-input w-44"
+        <div className="flex items-center gap-2 shrink-0">
+          <Filter size={16} className="text-textMuted" aria-hidden="true" />
+          <select
+            className="form-select w-44"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={e => setStatusFilter(e.target.value)}
+            aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
             <option value="available">Available</option>
@@ -181,67 +203,79 @@ export default function Assets() {
         </div>
       </div>
 
-      {/* Assets Grid / Table */}
-      <div className="flex gap-6 items-start">
-        <div className={`data-card flex-1 ${selectedAsset ? 'hidden lg:block' : ''}`}>
+      {/* Table + Detail Panel */}
+      <div className="flex gap-5 items-start">
+
+        {/* Table */}
+        <div className={`data-card flex-1 min-w-0 ${selectedAsset ? 'hidden lg:block' : ''}`}>
           {loading ? (
-            <div className="p-12 text-center text-baseSlate">Loading assets...</div>
-          ) : assets.length === 0 ? (
-            <div className="p-12 text-center text-baseSlate">No assets found matching your criteria.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-baseSlate font-medium border-b border-slate-200">
+            <div className="overflow-x-auto table-scroll">
+              <table className="data-table" aria-label="Loading assets">
+                <thead>
                   <tr>
-                    <th className="px-5 py-3.5">Asset Details</th>
-                    <th className="px-5 py-3.5">Tag</th>
-                    <th className="px-5 py-3.5">Category</th>
-                    <th className="px-5 py-3.5">Status</th>
-                    <th className="px-5 py-3.5">Holder / Location</th>
-                    <th className="px-5 py-3.5 text-right">Action</th>
+                    <th>Asset Details</th><th>Tag</th><th>Category</th>
+                    <th>Status</th><th>Holder / Location</th><th className="text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {assets.map((asset) => (
-                    <tr 
-                      key={asset.id} 
+                <tbody>
+                  {Array.from({ length: 6 }).map((_, i) => <SkeletonTableRow key={i} />)}
+                </tbody>
+              </table>
+            </div>
+          ) : assets.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <Package size={24} aria-hidden="true" />
+              </div>
+              <h3 className="text-sm font-semibold text-textSecondary mb-1">No assets found</h3>
+              <p className="text-sm text-textMuted">Adjust filters or register a new asset.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto table-scroll">
+              <table className="data-table" aria-label="Asset directory">
+                <thead>
+                  <tr>
+                    <th>Asset Details</th><th>Tag</th><th>Category</th>
+                    <th>Status</th><th>Holder / Location</th><th className="text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assets.map(asset => (
+                    <tr
+                      key={asset.id}
                       onClick={() => openDetails(asset)}
-                      className={`cursor-pointer transition-colors ${
-                        selectedAsset?.id === asset.id ? 'bg-accent/5' : 'hover:bg-slate-50/70'
-                      }`}
+                      className={`cursor-pointer ${selectedAsset?.id === asset.id ? 'bg-accentLight/30' : ''}`}
                     >
-                      <td className="px-5 py-4">
-                        <div className="font-medium text-nav">{asset.name}</div>
-                        <div className="text-xs text-slateLight">{asset.serial_number || 'No Serial #'}</div>
+                      <td>
+                        <div className="font-medium text-textPrimary">{asset.name}</div>
+                        <div className="text-xs text-textMuted font-mono mt-0.5">
+                          {asset.serial_number || 'No Serial #'}
+                        </div>
                       </td>
-                      <td className="px-5 py-4 font-mono text-xs font-semibold text-baseSlate">
+                      <td className="font-mono text-xs font-semibold text-textSecondary">
                         {asset.asset_tag}
                       </td>
-                      <td className="px-5 py-4 text-baseSlate">
-                        {asset.category.name}
-                      </td>
-                      <td className="px-5 py-4">
-                        {getStatusBadge(asset.status)}
-                      </td>
-                      <td className="px-5 py-4 text-baseSlate">
+                      <td className="text-textSecondary text-sm">{asset.category?.name || 'Uncategorized'}</td>
+                      <td>{getStatusBadge(asset.status)}</td>
+                      <td>
                         {asset.current_holder ? (
-                          <div className="flex items-center gap-1.5 font-medium text-nav">
-                            <UserIcon size={14} className="text-accent" />
+                          <div className="flex items-center gap-1.5 text-sm font-medium text-textPrimary">
+                            <UserIcon size={13} className="text-accent" aria-hidden="true" />
                             {asset.current_holder.full_name}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 text-xs text-slateLight">
-                            <MapPin size={14} />
+                          <div className="flex items-center gap-1.5 text-xs text-textMuted">
+                            <MapPin size={13} aria-hidden="true" />
                             {asset.location}
                           </div>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-right">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); openDetails(asset); }}
-                          className="text-accent hover:text-accentHover font-medium text-xs"
+                      <td className="text-right">
+                        <button
+                          onClick={e => { e.stopPropagation(); openDetails(asset); }}
+                          className="text-sm font-medium text-accent hover:text-accentHover transition-colors"
                         >
-                          View Details
+                          Details
                         </button>
                       </td>
                     </tr>
@@ -252,92 +286,111 @@ export default function Assets() {
           )}
         </div>
 
-        {/* Side Panel Details */}
+        {/* Detail Panel */}
         {selectedAsset && (
-          <div className="w-full lg:w-96 bg-white rounded-xl border border-slate-200 shadow-float overflow-hidden flex flex-col sticky top-20">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <aside
+            className="w-full lg:w-96 data-card flex flex-col sticky top-[68px] max-h-[calc(100vh-90px)] overflow-hidden animate-slide-in-left"
+            aria-label="Asset details"
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-borderBase flex items-start justify-between bg-surface/50 shrink-0">
               <div>
                 <span className="font-mono text-xs font-semibold text-accent block mb-0.5">
                   {selectedAsset.asset_tag}
                 </span>
-                <h3 className="font-semibold text-lg text-nav">{selectedAsset.name}</h3>
+                <h3 className="font-semibold text-textPrimary">{selectedAsset.name}</h3>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedAsset(null)}
-                className="p-1.5 text-slateLight hover:text-nav rounded-lg hover:bg-slate-100"
+                className="p-1.5 text-textMuted hover:text-textPrimary hover:bg-surfaceHover rounded-lg transition-colors shrink-0"
+                aria-label="Close detail panel"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4 border-b border-slate-100 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-xs text-slateLight block">Status</span>
-                  <div className="mt-1">{getStatusBadge(selectedAsset.status)}</div>
-                </div>
-                <div>
-                  <span className="text-xs text-slateLight block">Condition</span>
-                  <span className="font-medium capitalize text-nav">{selectedAsset.condition}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-slateLight block">Category</span>
-                  <span className="font-medium text-nav">{selectedAsset.category.name}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-slateLight block">Acquired</span>
-                  <span className="font-medium text-nav">
-                    {selectedAsset.acquisition_date ? format(parseISO(selectedAsset.acquisition_date), 'MMM yyyy') : 'N/A'}
-                  </span>
-                </div>
+            {/* Attributes */}
+            <div className="p-5 border-b border-borderBase grid grid-cols-2 gap-4 text-sm shrink-0">
+              <div>
+                <span className="text-xs text-textMuted block mb-1">Status</span>
+                {getStatusBadge(selectedAsset.status)}
+              </div>
+              <div>
+                <span className="text-xs text-textMuted block mb-1">Condition</span>
+                <span className="font-medium capitalize text-textPrimary">{selectedAsset.condition}</span>
+              </div>
+              <div>
+                <span className="text-xs text-textMuted block mb-1">Category</span>
+                <span className="font-medium text-textPrimary">{selectedAsset.category?.name || 'Uncategorized'}</span>
+              </div>
+              <div>
+                <span className="text-xs text-textMuted block mb-1">Acquired</span>
+                <span className="font-medium text-textPrimary">
+                  {selectedAsset.acquisition_date
+                    ? format(parseISO(selectedAsset.acquisition_date), 'MMM yyyy')
+                    : '—'}
+                </span>
               </div>
 
-              <div className="pt-2 border-t border-slate-100">
-                <span className="text-xs text-slateLight block mb-1">Current Location</span>
-                <div className="flex items-center gap-2 text-nav font-medium">
-                  <MapPin size={16} className="text-slateLight" />
+              <div className="col-span-2 pt-2 border-t border-borderBase">
+                <span className="text-xs text-textMuted block mb-1.5">Location</span>
+                <div className="flex items-center gap-2 text-sm font-medium text-textPrimary">
+                  <MapPin size={14} className="text-textMuted" aria-hidden="true" />
                   {selectedAsset.location}
                 </div>
               </div>
 
               {selectedAsset.current_holder && (
-                <div className="pt-2 border-t border-slate-100">
-                  <span className="text-xs text-slateLight block mb-1">Assigned Holder</span>
-                  <div className="flex items-center gap-2 text-nav font-medium">
-                    <UserIcon size={16} className="text-accent" />
+                <div className="col-span-2 border-t border-borderBase pt-2">
+                  <span className="text-xs text-textMuted block mb-1.5">Current Holder</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-accentMuted flex items-center justify-center text-accent font-bold text-xs">
+                      {selectedAsset.current_holder.full_name.charAt(0).toUpperCase()}
+                    </div>
                     <div>
-                      <div>{selectedAsset.current_holder.full_name}</div>
-                      <div className="text-xs text-slateLight font-normal">{selectedAsset.current_holder.email}</div>
+                      <div className="text-sm font-medium text-textPrimary">
+                        {selectedAsset.current_holder.full_name}
+                      </div>
+                      <div className="text-xs text-textMuted">
+                        {selectedAsset.current_holder.email}
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Allocation History */}
-            <div className="p-5 flex-1 overflow-y-auto max-h-80">
-              <div className="flex items-center gap-2 text-xs font-semibold text-baseSlate uppercase tracking-wider mb-3">
-                <History size={14} />
+            {/* History */}
+            <div className="p-5 flex-1 overflow-y-auto no-scrollbar">
+              <div className="flex items-center gap-2 text-xs font-semibold text-textMuted uppercase tracking-wider mb-3">
+                <History size={13} aria-hidden="true" />
                 Allocation History
               </div>
 
               {loadingHistory ? (
-                <div className="text-center py-4 text-xs text-slateLight">Loading logs...</div>
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-3 rounded-xl border border-borderBase space-y-1.5">
+                      <div className="skeleton h-3 w-28 rounded-md" />
+                      <div className="skeleton h-2.5 w-36 rounded-md" />
+                    </div>
+                  ))}
+                </div>
               ) : history.length === 0 ? (
-                <div className="text-center py-4 text-xs text-slateLight">No assignment history on record.</div>
+                <p className="text-xs text-textMuted text-center py-4">No assignment history on record.</p>
               ) : (
-                <div className="space-y-3">
-                  {history.map((log) => (
-                    <div key={log.id} className="p-3 bg-surface rounded-lg text-xs space-y-1 border border-slate-100">
-                      <div className="flex justify-between font-medium text-nav">
+                <div className="space-y-2">
+                  {history.map(log => (
+                    <div key={log.id} className="p-3 bg-surface rounded-xl text-xs border border-borderBase space-y-1">
+                      <div className="flex justify-between font-medium text-textPrimary">
                         <span>{log.user.full_name}</span>
-                        <span className="capitalize text-slateLight">{log.status}</span>
+                        <span className="capitalize text-textMuted badge badge-neutral">{log.status}</span>
                       </div>
-                      <div className="text-slateLight">
+                      <div className="text-textMuted">
                         Assigned: {format(parseISO(log.allocated_at), 'MMM d, yyyy')}
                       </div>
                       {log.returned_at && (
-                        <div className="text-slateLight">
+                        <div className="text-textMuted">
                           Returned: {format(parseISO(log.returned_at), 'MMM d, yyyy')}
                         </div>
                       )}
@@ -346,79 +399,108 @@ export default function Assets() {
                 </div>
               )}
             </div>
-          </div>
+          </aside>
         )}
       </div>
 
       {/* Register Asset Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-float max-w-md w-full overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-surface">
-              <h3 className="font-semibold text-lg">Register New Asset</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slateLight hover:text-nav">
-                <X size={18} />
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="register-asset-title"
+        >
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3 id="register-asset-title" className="font-semibold text-textPrimary">
+                Register New Asset
+              </h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-textMuted hover:text-textPrimary hover:bg-surfaceHover rounded-lg transition-colors"
+                aria-label="Close dialog"
+              >
+                <X size={17} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateAsset} className="p-5 space-y-4">
-              <div>
-                <label className="form-label">Asset Name</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder='e.g. MacBook Pro 16"' 
-                  className="form-input"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                />
+            <form onSubmit={handleCreateAsset}>
+              <div className="modal-body space-y-4">
+                <div className="form-group">
+                  <label htmlFor="asset-name" className="form-label">
+                    Asset Name <span className="text-danger" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="asset-name"
+                    type="text"
+                    required
+                    placeholder='e.g. MacBook Pro 16"'
+                    className="form-input"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="asset-category" className="form-label">
+                    Category <span className="text-danger" aria-hidden="true">*</span>
+                  </label>
+                  <select
+                    id="asset-category"
+                    className="form-select"
+                    value={categoryId}
+                    onChange={e => setCategoryId(Number(e.target.value))}
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="asset-location" className="form-label">
+                    Physical Location <span className="text-danger" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="asset-location"
+                    type="text"
+                    required
+                    placeholder="e.g. Engineering Lab — Desk 4"
+                    className="form-input"
+                    value={location}
+                    onChange={e => setLocation(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="asset-cost" className="form-label">
+                    Acquisition Cost (USD)
+                  </label>
+                  <input
+                    id="asset-cost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 2,499.00"
+                    className="form-input"
+                    value={cost}
+                    onChange={e => setCost(e.target.value)}
+                  />
+                  <p className="form-helper">Optional — leave blank if unknown</p>
+                </div>
               </div>
 
-              <div>
-                <label className="form-label">Category</label>
-                <select 
-                  className="form-input"
-                  value={categoryId}
-                  onChange={e => setCategoryId(Number(e.target.value))}
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="btn-secondary"
                 >
-                  <option value={1}>Electronics</option>
-                  <option value={2}>Vehicles</option>
-                  <option value={3}>Furniture</option>
-                  <option value={4}>Tools & Equipment</option>
-                  <option value={5}>Conference Rooms</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="form-label">Physical Location</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="e.g. Engineering Lab - Desk 4" 
-                  className="form-input"
-                  value={location}
-                  onChange={e => setLocation(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="form-label">Acquisition Cost ($)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  placeholder="e.g. 2499.00" 
-                  className="form-input"
-                  value={cost}
-                  onChange={e => setCost(e.target.value)}
-                />
-              </div>
-
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
                   Cancel
                 </button>
                 <button type="submit" disabled={creating} className="btn-primary">
-                  {creating && <Loader2 size={16} className="animate-spin mr-1" />}
+                  {creating && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
                   Register Asset
                 </button>
               </div>

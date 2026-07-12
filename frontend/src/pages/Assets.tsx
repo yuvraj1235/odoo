@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { TableVirtuoso } from 'react-virtuoso';
 import {
   Search, Filter, Plus, Package, MapPin,
   CheckCircle, Clock, AlertTriangle, X, History,
-  User as UserIcon, Loader2
+  User as UserIcon, Loader2, Upload, Sparkles
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -67,50 +69,63 @@ function getStatusBadge(status: string) {
 
 export default function Assets() {
   const { user } = useAuth();
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [history, setHistory] = useState<AllocationHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+
+  // Debounce search input for high throughput
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // TanStack Query for Categories (high stale time)
+  const { data: categories = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['categories'],
+    queryFn: async () => (await api.get('/categories/')).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // TanStack Query for Assets directory
+  const { data: assets = [], isLoading: loading } = useQuery<Asset[]>({
+    queryKey: ['assets', debouncedSearch, statusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (statusFilter) params.append('status', statusFilter);
+      const res = await api.get(`/assets/?${params.toString()}`);
+      return res.data;
+    },
+  });
 
   // New asset form state
   const [name, setName] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
   const [categoryId, setCategoryId] = useState<number>(0);
   const [location, setLocation] = useState('');
   const [cost, setCost] = useState('');
+  const [acquisitionDate, setAcquisitionDate] = useState('');
   const [creating, setCreating] = useState(false);
+  const [autoFilledFields, setAutoFilledFields] = useState<Record<string, boolean>>({});
+  const [extractingOcr, setExtractingOcr] = useState(false);
+  const [ocrFeedback, setOcrFeedback] = useState<string | null>(null);
 
-  const fetchAssets = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (statusFilter) params.append('status', statusFilter);
-      const [res, catRes] = await Promise.all([
-        api.get(`/assets/?${params.toString()}`),
-        api.get('/categories/')
-      ]);
-      setAssets(res.data);
-      setCategories(catRes.data);
-      if (catRes.data.length > 0 && !categoryId) {
-        setCategoryId(catRes.data[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to fetch assets or categories', err);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (categories.length > 0 && !categoryId) {
+      setCategoryId(categories[0].id);
     }
-  };
-
-  useEffect(() => { fetchAssets(); }, [statusFilter]);
+  }, [categories, categoryId]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchAssets();
+    setDebouncedSearch(search);
   };
 
   const openDetails = async (asset: Asset) => {
@@ -126,18 +141,63 @@ export default function Assets() {
     }
   };
 
+  const handleOcrUpload = async (file: File) => {
+    setExtractingOcr(true);
+    setOcrFeedback(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/ai/extract-receipt', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const data = res.data;
+      const updatedFields: Record<string, boolean> = {};
+      
+      if (data.asset_name) {
+        setName(data.asset_name);
+        updatedFields['name'] = true;
+      }
+      if (data.serial_number) {
+        setSerialNumber(data.serial_number);
+        updatedFields['serial_number'] = true;
+      }
+      if (data.acquisition_cost !== null && data.acquisition_cost !== undefined) {
+        setCost(String(data.acquisition_cost));
+        updatedFields['cost'] = true;
+      }
+      if (data.acquisition_date) {
+        setAcquisitionDate(data.acquisition_date);
+        updatedFields['acquisition_date'] = true;
+      }
+      
+      setAutoFilledFields(updatedFields);
+      setOcrFeedback(`Extracted from ${file.name} (Confidence: ${Math.round((data.confidence || 0.9) * 100)}%)`);
+    } catch (err) {
+      console.error('OCR extraction failed', err);
+      setOcrFeedback('Failed to extract document data. Please enter details manually.');
+    } finally {
+      setExtractingOcr(false);
+    }
+  };
+
   const handleCreateAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     try {
       await api.post('/assets/', {
-        name, category_id: categoryId, location,
+        name,
+        serial_number: serialNumber || null,
+        category_id: categoryId,
+        location,
         acquisition_cost: cost ? parseFloat(cost) : null,
+        acquisition_date: acquisitionDate ? new Date(acquisitionDate).toISOString() : null,
         condition: 'new', status: 'available', is_bookable: false
       });
       setIsModalOpen(false);
-      setName(''); setLocation(''); setCost('');
-      fetchAssets();
+      setName(''); setSerialNumber(''); setLocation(''); setCost(''); setAcquisitionDate('');
+      setAutoFilledFields({}); setOcrFeedback(null);
+      queryClient.invalidateQueries({ queryKey: ['assets'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch (err) {
       console.error('Failed to create asset', err);
     } finally {
@@ -231,57 +291,70 @@ export default function Assets() {
               <p className="text-sm text-textMuted">Adjust filters or register a new asset.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto table-scroll">
-              <table className="data-table" aria-label="Asset directory">
-                <thead>
+            <div className="overflow-x-auto table-scroll h-[620px] rounded-lg border border-borderBase">
+              <TableVirtuoso
+                data={assets}
+                components={{
+                  Table: ({ style, ...props }) => (
+                    <table {...props} className="data-table w-full" style={{ ...style }} />
+                  ),
+                  TableHead: React.forwardRef((props, ref) => (
+                    <thead {...props} ref={ref} className="bg-surface sticky top-0 z-10 shadow-sm" />
+                  )),
+                  TableRow: ({ item: asset, ...props }) => (
+                    <tr
+                      {...props}
+                      onClick={() => openDetails(asset)}
+                      className={`cursor-pointer hover:bg-surface/60 transition-colors ${selectedAsset?.id === asset.id ? 'bg-accentLight/30' : ''}`}
+                    />
+                  ),
+                  TableBody: React.forwardRef((props, ref) => (
+                    <tbody {...props} ref={ref} />
+                  )),
+                }}
+                fixedHeaderContent={() => (
                   <tr>
                     <th>Asset Details</th><th>Tag</th><th>Category</th>
                     <th>Status</th><th>Holder / Location</th><th className="text-right">Action</th>
                   </tr>
-                </thead>
-                <tbody>
-                  {assets.map(asset => (
-                    <tr
-                      key={asset.id}
-                      onClick={() => openDetails(asset)}
-                      className={`cursor-pointer ${selectedAsset?.id === asset.id ? 'bg-accentLight/30' : ''}`}
-                    >
-                      <td>
-                        <div className="font-medium text-textPrimary">{asset.name}</div>
-                        <div className="text-xs text-textMuted font-mono mt-0.5">
-                          {asset.serial_number || 'No Serial #'}
+                )}
+                itemContent={(_, asset) => (
+                  <>
+                    <td className="px-5 py-3.5 border-b border-borderBase">
+                      <div className="font-medium text-textPrimary">{asset.name}</div>
+                      <div className="text-xs text-textMuted font-mono mt-0.5">
+                        {asset.serial_number || 'No Serial #'}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 border-b border-borderBase font-mono text-xs font-semibold text-textSecondary">
+                      {asset.asset_tag}
+                    </td>
+                    <td className="px-5 py-3.5 border-b border-borderBase text-textSecondary text-sm">{asset.category?.name || 'Uncategorized'}</td>
+                    <td className="px-5 py-3.5 border-b border-borderBase">{getStatusBadge(asset.status)}</td>
+                    <td className="px-5 py-3.5 border-b border-borderBase">
+                      {asset.current_holder ? (
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-textPrimary">
+                          <UserIcon size={13} className="text-accent" aria-hidden="true" />
+                          {asset.current_holder.full_name}
                         </div>
-                      </td>
-                      <td className="font-mono text-xs font-semibold text-textSecondary">
-                        {asset.asset_tag}
-                      </td>
-                      <td className="text-textSecondary text-sm">{asset.category?.name || 'Uncategorized'}</td>
-                      <td>{getStatusBadge(asset.status)}</td>
-                      <td>
-                        {asset.current_holder ? (
-                          <div className="flex items-center gap-1.5 text-sm font-medium text-textPrimary">
-                            <UserIcon size={13} className="text-accent" aria-hidden="true" />
-                            {asset.current_holder.full_name}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-xs text-textMuted">
-                            <MapPin size={13} aria-hidden="true" />
-                            {asset.location}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-right">
-                        <button
-                          onClick={e => { e.stopPropagation(); openDetails(asset); }}
-                          className="text-sm font-medium text-accent hover:text-accentHover transition-colors"
-                        >
-                          Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-textMuted">
+                          <MapPin size={13} aria-hidden="true" />
+                          {asset.location}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 border-b border-borderBase text-right">
+                      <button
+                        onClick={e => { e.stopPropagation(); openDetails(asset); }}
+                        className="text-sm font-medium text-accent hover:text-accentHover transition-colors"
+                      >
+                        Details
+                      </button>
+                    </td>
+                  </>
+                )}
+              />
             </div>
           )}
         </div>
@@ -427,18 +500,88 @@ export default function Assets() {
 
             <form onSubmit={handleCreateAsset}>
               <div className="modal-body space-y-4">
-                <div className="form-group">
-                  <label htmlFor="asset-name" className="form-label">
-                    Asset Name <span className="text-danger" aria-hidden="true">*</span>
+                {/* AI OCR Dropzone */}
+                <div className="p-4 rounded-xl border-2 border-dashed border-borderBase hover:border-accent bg-surfaceCard transition-all">
+                  <label className="flex flex-col items-center justify-center cursor-pointer space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleOcrUpload(file);
+                      }}
+                      disabled={extractingOcr}
+                    />
+                    <div className="w-10 h-10 rounded-full bg-accentLight/40 flex items-center justify-center text-accent">
+                      {extractingOcr ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-textPrimary">
+                        <Sparkles size={14} className="text-accent" />
+                        <span>Auto-Fill via Invoice/Receipt</span>
+                      </div>
+                      <p className="text-[11px] text-textMuted mt-0.5">
+                        Drop image or PDF to instantly extract asset details & cost
+                      </p>
+                    </div>
                   </label>
+                  {ocrFeedback && (
+                    <div className={`mt-3 p-2 rounded-lg text-xs font-medium flex items-center justify-between ${
+                      ocrFeedback.includes('Failed') ? 'bg-danger/10 text-danger' : 'bg-info/10 text-info'
+                    }`}>
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Sparkles size={13} className="shrink-0" />
+                        {ocrFeedback}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="asset-name" className="form-label mb-0">
+                      Asset Name <span className="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    {autoFilledFields['name'] && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-info/15 text-info border border-info/30 shadow-sm animate-fade-in" title="Suggested by AI from uploaded invoice">
+                        <Sparkles size={10} /> Suggested by AI
+                      </span>
+                    )}
+                  </div>
                   <input
                     id="asset-name"
                     type="text"
                     required
                     placeholder='e.g. MacBook Pro 16"'
-                    className="form-input"
+                    className={`form-input transition-all ${
+                      autoFilledFields['name'] ? 'border-info/80 bg-info/5 shadow-[0_0_8px_rgba(59,130,246,0.15)]' : ''
+                    }`}
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={e => { setName(e.target.value); setAutoFilledFields(prev => ({ ...prev, name: false })); }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="asset-serial" className="form-label mb-0">
+                      Serial Number
+                    </label>
+                    {autoFilledFields['serial_number'] && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-info/15 text-info border border-info/30 shadow-sm animate-fade-in" title="Suggested by AI from uploaded invoice">
+                        <Sparkles size={10} /> Suggested by AI
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    id="asset-serial"
+                    type="text"
+                    placeholder="e.g. SN-8839201-A"
+                    className={`form-input transition-all ${
+                      autoFilledFields['serial_number'] ? 'border-info/80 bg-info/5 shadow-[0_0_8px_rgba(59,130,246,0.15)]' : ''
+                    }`}
+                    value={serialNumber}
+                    onChange={e => { setSerialNumber(e.target.value); setAutoFilledFields(prev => ({ ...prev, serial_number: false })); }}
                   />
                 </div>
 
@@ -473,21 +616,53 @@ export default function Assets() {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="asset-cost" className="form-label">
-                    Acquisition Cost (USD)
-                  </label>
-                  <input
-                    id="asset-cost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="e.g. 2,499.00"
-                    className="form-input"
-                    value={cost}
-                    onChange={e => setCost(e.target.value)}
-                  />
-                  <p className="form-helper">Optional — leave blank if unknown</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="form-group">
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="asset-cost" className="form-label mb-0">
+                        Acquisition Cost ($)
+                      </label>
+                      {autoFilledFields['cost'] && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-info/15 text-info border border-info/30 shadow-sm animate-fade-in" title="Suggested by AI from uploaded invoice">
+                          <Sparkles size={10} /> Suggested
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      id="asset-cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="e.g. 2,499.00"
+                      className={`form-input transition-all ${
+                        autoFilledFields['cost'] ? 'border-info/80 bg-info/5 shadow-[0_0_8px_rgba(59,130,246,0.15)]' : ''
+                      }`}
+                      value={cost}
+                      onChange={e => { setCost(e.target.value); setAutoFilledFields(prev => ({ ...prev, cost: false })); }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="asset-acq-date" className="form-label mb-0">
+                        Acquisition Date
+                      </label>
+                      {autoFilledFields['acquisition_date'] && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-info/15 text-info border border-info/30 shadow-sm animate-fade-in" title="Suggested by AI from uploaded invoice">
+                          <Sparkles size={10} /> Suggested
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      id="asset-acq-date"
+                      type="date"
+                      className={`form-input transition-all ${
+                        autoFilledFields['acquisition_date'] ? 'border-info/80 bg-info/5 shadow-[0_0_8px_rgba(59,130,246,0.15)]' : ''
+                      }`}
+                      value={acquisitionDate}
+                      onChange={e => { setAcquisitionDate(e.target.value); setAutoFilledFields(prev => ({ ...prev, acquisition_date: false })); }}
+                    />
+                  </div>
                 </div>
               </div>
 

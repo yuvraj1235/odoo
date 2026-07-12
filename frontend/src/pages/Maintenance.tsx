@@ -5,9 +5,9 @@ import {
   Wrench, Plus, CheckCircle2, ShieldAlert, AlertTriangle, 
   Clock, CheckSquare, Settings2, X, Loader2
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, differenceInMinutes } from 'date-fns';
 
-type MaintenanceStatus = 'pending' | 'approved' | 'technician_assigned' | 'in_progress' | 'resolved';
+type MaintenanceStatus = 'pending' | 'approved' | 'technician_assigned' | 'in_progress' | 'resolved' | 'rejected';
 type Priority = 'low' | 'medium' | 'high' | 'critical';
 
 interface MaintenanceTicket {
@@ -18,6 +18,7 @@ interface MaintenanceTicket {
   issue_description: string;
   priority: Priority;
   status: MaintenanceStatus;
+  sla_status?: 'normal' | 'warning' | 'breached';
   cost: number | null;
   created_at: string;
   resolved_at: string | null;
@@ -120,6 +121,41 @@ export default function Maintenance() {
     }
   };
 
+  const getSLADetails = (t: MaintenanceTicket) => {
+    if (t.status === 'resolved' || t.status === 'rejected') {
+      return null;
+    }
+    const created = parseISO(t.created_at);
+    const hoursMap: Record<string, number> = {
+      critical: 2,
+      high: 4,
+      medium: 12,
+      low: 24
+    };
+    const allowedHours = hoursMap[t.priority] || 12;
+    const totalAllowedMins = allowedHours * 60;
+    const elapsedMins = differenceInMinutes(new Date(), created);
+    const remainingMins = totalAllowedMins - elapsedMins;
+
+    let status = t.sla_status || 'normal';
+    if (remainingMins <= 0) status = 'breached';
+    else if (remainingMins <= totalAllowedMins * 0.25) status = 'warning';
+
+    let text = '';
+    if (remainingMins <= 0) {
+      const overdueMins = Math.abs(remainingMins);
+      const hrs = Math.floor(overdueMins / 60);
+      const mins = overdueMins % 60;
+      text = hrs > 0 ? `SLA Breached by ${hrs}h ${mins}m` : `SLA Breached by ${mins}m`;
+    } else {
+      const hrs = Math.floor(remainingMins / 60);
+      const mins = remainingMins % 60;
+      text = hrs > 0 ? `SLA: ${hrs}h ${mins}m left` : `SLA: ${mins}m left`;
+    }
+
+    return { status, text };
+  };
+
   const canManage = user?.role === 'admin' || user?.role === 'asset_manager';
 
   const onDragStart = (e: React.DragEvent, id: number) => {
@@ -200,48 +236,79 @@ export default function Maintenance() {
                     <div className="flex items-center justify-center py-8">
                       <Loader2 size={24} className="animate-spin text-textMuted" />
                     </div>
-                  ) : columnTickets.map(t => (
-                    <div 
-                      key={t.id}
-                      draggable={canManage}
-                      onDragStart={(e) => onDragStart(e, t.id)}
-                      className={`bg-surfaceCard p-4 rounded-xl shadow-sm border border-borderBase 
-                        ${canManage ? 'cursor-grab active:cursor-grabbing hover:border-accent hover:shadow-card transition-all' : ''}
-                        ${draggedTicketId === t.id ? 'opacity-50 scale-95' : ''}
-                        ${t.priority === 'critical' ? 'border-l-4 border-l-danger' : ''}
-                        ${isResolved ? 'opacity-70' : ''}
-                      `}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-mono text-xs font-semibold text-accent bg-accentLight px-2 py-0.5 rounded">
-                          {t.asset.asset_tag}
-                        </span>
-                        {getPriorityBadge(t.priority)}
-                      </div>
-                      
-                      <p className="text-sm text-textPrimary font-medium mb-3 line-clamp-3">
-                        {t.issue_description}
-                      </p>
-
-                      <div className="flex items-center justify-between mt-auto pt-3 border-t border-borderBase/60">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-textMuted uppercase tracking-wide">Reported By</span>
-                          <span className="text-xs text-textSecondary font-medium truncate max-w-[120px]">{t.user.full_name}</span>
+                  ) : columnTickets.map(t => {
+                    const sla = getSLADetails(t);
+                    return (
+                      <div 
+                        key={t.id}
+                        draggable={canManage}
+                        onDragStart={(e) => onDragStart(e, t.id)}
+                        className={`bg-surfaceCard p-4 rounded-xl shadow-sm border transition-all relative
+                          ${canManage ? 'cursor-grab active:cursor-grabbing hover:shadow-card' : ''}
+                          ${draggedTicketId === t.id ? 'opacity-50 scale-95' : ''}
+                          ${isResolved ? 'opacity-70 border-borderBase' : 
+                            sla?.status === 'breached' ? 'border-danger border-2 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.3)]' :
+                            sla?.status === 'warning' ? 'border-warning border-2 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.25)]' :
+                            t.priority === 'critical' ? 'border-l-4 border-l-danger border-borderBase hover:border-accent' :
+                            'border-borderBase hover:border-accent'
+                          }
+                        `}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-mono text-xs font-semibold text-accent bg-accentLight px-2 py-0.5 rounded">
+                            {t.asset.asset_tag}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {sla && sla.status === 'breached' && (
+                              <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-danger text-white animate-bounce flex items-center gap-1 shadow-sm">
+                                <ShieldAlert size={10} /> SLA BREACHED
+                              </span>
+                            )}
+                            {sla && sla.status === 'warning' && (
+                              <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/40 flex items-center gap-1">
+                                <Clock size={10} /> SLA WARNING
+                              </span>
+                            )}
+                            {getPriorityBadge(t.priority)}
+                          </div>
                         </div>
-                        {t.assigned_to && (
-                          <div className="flex flex-col items-end">
-                            <span className="text-[10px] text-textMuted uppercase tracking-wide">Tech</span>
-                            <span className="text-xs font-semibold text-nav truncate max-w-[100px]">{t.assigned_to.full_name}</span>
+                        
+                        <p className="text-sm text-textPrimary font-medium mb-2 line-clamp-3">
+                          {t.issue_description}
+                        </p>
+
+                        {sla && (
+                          <div className={`mb-3 flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-md border
+                            ${sla.status === 'breached' ? 'bg-danger/10 text-danger border-danger/30' :
+                              sla.status === 'warning' ? 'bg-warning/10 text-warning border-warning/30' :
+                              'bg-surfaceHover text-textSecondary border-borderBase'
+                            }
+                          `}>
+                            <Clock size={12} className={sla.status === 'breached' ? 'text-danger' : sla.status === 'warning' ? 'text-warning' : 'text-textMuted'} />
+                            <span>{sla.text}</span>
                           </div>
                         )}
-                        {isResolved && t.resolved_at && (
-                          <div className="text-[10px] text-success font-medium">
-                            Resolved {format(parseISO(t.resolved_at), 'd MMM')}
+
+                        <div className="flex items-center justify-between mt-auto pt-3 border-t border-borderBase/60">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-textMuted uppercase tracking-wide">Reported By</span>
+                            <span className="text-xs text-textSecondary font-medium truncate max-w-[120px]">{t.user.full_name}</span>
                           </div>
-                        )}
+                          {t.assigned_to && (
+                            <div className="flex flex-col items-end">
+                              <span className="text-[10px] text-textMuted uppercase tracking-wide">Tech</span>
+                              <span className="text-xs font-semibold text-nav truncate max-w-[100px]">{t.assigned_to.full_name}</span>
+                            </div>
+                          )}
+                          {isResolved && t.resolved_at && (
+                            <div className="text-[10px] text-success font-medium">
+                              Resolved {format(parseISO(t.resolved_at), 'd MMM')}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   
                   {!loading && columnTickets.length === 0 && (
                     <div className="h-24 flex items-center justify-center border-2 border-dashed border-borderBase rounded-xl text-xs text-textMuted font-medium">

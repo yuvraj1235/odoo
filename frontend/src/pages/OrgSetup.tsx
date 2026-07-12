@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
-  Building2, Users, FolderTree, Plus, CheckCircle, 
-  X, Loader2, Shield, UserCheck, Trash2, Edit
+  Building2, Users, FolderTree, Plus, X
 } from 'lucide-react';
 
 interface Department {
@@ -35,17 +35,12 @@ interface UserProfile {
 
 export default function OrgSetup() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'departments' | 'categories' | 'users'>('departments');
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Modals
+  // Modals & Form State
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
-  
-  // Forms
   const [deptName, setDeptName] = useState('');
   const [catName, setCatName] = useState('');
   const [catDesc, setCatDesc] = useState('');
@@ -54,27 +49,28 @@ export default function OrgSetup() {
   const [cfType, setCfType] = useState('string');
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [deptRes, catRes, usersRes] = await Promise.all([
-        api.get('/departments/'),
-        api.get('/categories/'),
-        api.get('/users/')
-      ]);
-      setDepartments(deptRes.data);
-      setCategories(catRes.data);
-      setUsers(usersRes.data);
-    } catch (err) {
-      console.error('Failed to load org setup data', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query for Static Directories with high staleTime/gcTime
+  const { data: departments = [], isLoading: loadingDepts } = useQuery<Department[]>({
+    queryKey: ['departments'],
+    queryFn: async () => (await api.get('/departments/')).data,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000,   // 30 minutes
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const { data: categories = [], isLoading: loadingCats } = useQuery<Category[]>({
+    queryKey: ['categories'],
+    queryFn: async () => (await api.get('/categories/')).data,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000,   // 30 minutes
+  });
+
+  const { data: users = [], isLoading: loadingUsers } = useQuery<UserProfile[]>({
+    queryKey: ['users'],
+    queryFn: async () => (await api.get('/users/')).data,
+    staleTime: 60 * 1000,
+  });
+
+  const loading = loadingDepts || loadingCats || loadingUsers;
 
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +79,7 @@ export default function OrgSetup() {
       await api.post('/departments/', { name: deptName, status: 'active' });
       setIsDeptModalOpen(false);
       setDeptName('');
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
     } catch (err) {
       console.error('Failed to create department', err);
     } finally {
@@ -118,7 +114,7 @@ export default function OrgSetup() {
       setCatName('');
       setCatDesc('');
       setCustomFieldsList([]);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
     } catch (err) {
       console.error('Failed to create category', err);
     } finally {
@@ -128,8 +124,8 @@ export default function OrgSetup() {
 
   const handleUpdateRole = async (userId: number, newRole: string) => {
     try {
-      await api.put(`/users/${userId}`, { role: newRole });
-      fetchData();
+      await api.patch(`/users/${userId}`, { role: newRole });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     } catch (err) {
       console.error('Failed to update user role', err);
     }

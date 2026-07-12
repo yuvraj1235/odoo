@@ -10,7 +10,7 @@ from app.database import AsyncSessionLocal
 
 from app.routers import (
     auth, users, departments, categories, assets,
-    allocations, bookings, maintenance, audits, analytics, logs
+    allocations, bookings, maintenance, audits, analytics, logs, ai
 )
 
 
@@ -19,6 +19,11 @@ async def lifespan(app: FastAPI):
     # Create tables on startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        from sqlalchemy import text
+        try:
+            await conn.execute(text("ALTER TABLE maintenance_requests ADD COLUMN sla_status VARCHAR(20) DEFAULT 'normal'"))
+        except Exception:
+            pass
 
     # Seed initial data
     async with AsyncSessionLocal() as session:
@@ -56,6 +61,7 @@ app.include_router(maintenance.router, prefix=PREFIX)
 app.include_router(audits.router, prefix=PREFIX)
 app.include_router(analytics.router, prefix=PREFIX)
 app.include_router(logs.router, prefix=PREFIX)
+app.include_router(ai.router, prefix=PREFIX)
 
 
 @app.get("/")

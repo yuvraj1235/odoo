@@ -19,6 +19,7 @@ from app.schemas import (
     MaintenanceByCategory, UtilizationItem
 )
 from app.security import CurrentUser
+from app.cache import cache
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -30,6 +31,10 @@ def utcnow() -> datetime:
 
 @router.get("/kpis", response_model=KPIResponse)
 async def get_kpis(db: DbDep, current_user: CurrentUser) -> KPIResponse:
+    cached = await cache.get("analytics:kpis")
+    if cached is not None:
+        return cached
+
     now = utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -73,7 +78,7 @@ async def get_kpis(db: DbDep, current_user: CurrentUser) -> KPIResponse:
         )
     )
 
-    return KPIResponse(
+    res = KPIResponse(
         assets_available=available.scalar_one(),
         assets_allocated=allocated.scalar_one(),
         maintenance_today=maint_today.scalar_one(),
@@ -82,6 +87,8 @@ async def get_kpis(db: DbDep, current_user: CurrentUser) -> KPIResponse:
         upcoming_returns=upcoming_returns.scalar_one(),
         overdue_returns=overdue_returns.scalar_one(),
     )
+    await cache.set("analytics:kpis", res, ttl_seconds=300)
+    return res
 
 
 @router.get("/overdue", response_model=list[dict])
@@ -114,6 +121,10 @@ async def get_overdue(db: DbDep, current_user: CurrentUser) -> list[dict]:
 
 @router.get("/utilization", response_model=list[UtilizationItem])
 async def get_utilization(db: DbDep, current_user: CurrentUser) -> list[UtilizationItem]:
+    cached = await cache.get("analytics:utilization")
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(
             Asset.id,
@@ -135,7 +146,7 @@ async def get_utilization(db: DbDep, current_user: CurrentUser) -> list[Utilizat
         .limit(20)
     )
     rows = result.all()
-    return [
+    res = [
         UtilizationItem(
             asset_name=r.name,
             asset_tag=r.asset_tag,
@@ -144,12 +155,18 @@ async def get_utilization(db: DbDep, current_user: CurrentUser) -> list[Utilizat
         )
         for r in rows
     ]
+    await cache.set("analytics:utilization", res, ttl_seconds=600)
+    return res
 
 
 @router.get("/maintenance-by-category", response_model=list[MaintenanceByCategory])
 async def get_maintenance_by_category(
     db: DbDep, current_user: CurrentUser
 ) -> list[MaintenanceByCategory]:
+    cached = await cache.get("analytics:maintenance-by-category")
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(
             AssetCategory.name,
@@ -160,14 +177,20 @@ async def get_maintenance_by_category(
         .group_by(AssetCategory.name)
         .order_by(func.count(MaintenanceRequest.id).desc())
     )
-    return [
+    res = [
         MaintenanceByCategory(category_name=r.name, count=r.count)
         for r in result.all()
     ]
+    await cache.set("analytics:maintenance-by-category", res, ttl_seconds=600)
+    return res
 
 
 @router.get("/department-allocation", response_model=list[DeptAllocation])
 async def get_dept_allocation(db: DbDep, current_user: CurrentUser) -> list[DeptAllocation]:
+    cached = await cache.get("analytics:department-allocation")
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(
             Department.name,
@@ -178,14 +201,20 @@ async def get_dept_allocation(db: DbDep, current_user: CurrentUser) -> list[Dept
         .group_by(Department.name)
         .order_by(func.count(Allocation.id).desc())
     )
-    return [
+    res = [
         DeptAllocation(department_name=r.name, allocated_count=r.allocated_count)
         for r in result.all()
     ]
+    await cache.set("analytics:department-allocation", res, ttl_seconds=600)
+    return res
 
 
 @router.get("/booking-heatmap", response_model=list[BookingHeatmapItem])
 async def get_booking_heatmap(db: DbDep, current_user: CurrentUser) -> list[BookingHeatmapItem]:
+    cached = await cache.get("analytics:booking-heatmap")
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(
             extract("hour", Booking.start_time).label("hour"),
@@ -195,7 +224,7 @@ async def get_booking_heatmap(db: DbDep, current_user: CurrentUser) -> list[Book
         .group_by("hour", "dow")
         .order_by("dow", "hour")
     )
-    return [
+    res = [
         BookingHeatmapItem(
             hour=int(r.hour),
             day_of_week=int(r.dow),
@@ -203,3 +232,5 @@ async def get_booking_heatmap(db: DbDep, current_user: CurrentUser) -> list[Book
         )
         for r in result.all()
     ]
+    await cache.set("analytics:booking-heatmap", res, ttl_seconds=600)
+    return res

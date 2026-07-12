@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +13,7 @@ from app.models import (
 )
 from app.schemas import BookingCreate, BookingResponse, BookingUpdate
 from app.security import CurrentUser, require_roles
+from app.cache import cache
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -32,7 +33,7 @@ async def _check_overlap(
 ) -> Booking | None:
     """Return conflicting booking if overlap exists, else None."""
     # Overlap condition: existing.start < new.end AND existing.end > new.start
-    q = select(Booking).where(
+    q = select(Booking).options(selectinload(Booking.user)).where(
         Booking.asset_id == asset_id,
         Booking.status.in_([BookingStatus.upcoming, BookingStatus.ongoing]),
         Booking.start_time < end,
@@ -42,6 +43,37 @@ async def _check_overlap(
         q = q.where(Booking.id != exclude_id)
     result = await db.execute(q)
     return result.scalar_one_or_none()
+
+
+async def _get_smart_recommendations(
+    db: AsyncSession,
+    asset: Asset,
+    start: datetime,
+    end: datetime,
+) -> list[dict]:
+    """Find unbooked alternative resources in the same category during requested window."""
+    q = select(Asset).where(
+        Asset.category_id == asset.category_id,
+        Asset.id != asset.id,
+        Asset.is_bookable == True,
+        Asset.status == AssetStatus.available,
+    )
+    result = await db.execute(q)
+    alternatives = result.scalars().all()
+
+    recommendations = []
+    for alt in alternatives:
+        conflict = await _check_overlap(db, alt.id, start, end)
+        if not conflict:
+            recommendations.append({
+                "id": alt.id,
+                "resource_id": alt.asset_tag,
+                "name": alt.name,
+                "location": alt.location,
+            })
+            if len(recommendations) >= 4:
+                break
+    return recommendations
 
 
 @router.get("/", response_model=list[BookingResponse])
@@ -82,16 +114,19 @@ async def create_booking(
     if not asset.is_bookable:
         raise HTTPException(status_code=400, detail="Asset is not bookable")
 
-    # Strict overlap validation
+    # Strict overlap validation with Smart Swap Recommendation Engine
     conflict = await _check_overlap(db, payload.asset_id, payload.start_time, payload.end_time)
     if conflict:
+        recs = await _get_smart_recommendations(db, asset, payload.start_time, payload.end_time)
+        team_name = conflict.user.full_name if conflict.user else "Another User"
+        time_str = f"{conflict.start_time.strftime('%H:%M')} - {conflict.end_time.strftime('%H:%M')}"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
-                "message": "Time slot conflicts with an existing booking",
-                "conflict_start": conflict.start_time.isoformat(),
-                "conflict_end": conflict.end_time.isoformat(),
-                "conflict_booking_id": conflict.id,
+                "status": "conflict",
+                "message": "Resource is unavailable during this time window.",
+                "conflicting_booking": { "team": team_name, "time": time_str },
+                "recommendations": recs,
             },
         )
 
@@ -116,6 +151,8 @@ async def create_booking(
     db.add(log)
     await db.commit()
     await db.refresh(booking)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
 
     result = await db.execute(
         select(Booking).options(*_BOOKING_LOAD).where(Booking.id == booking.id)
@@ -170,6 +207,8 @@ async def update_booking(
 
     await db.commit()
     await db.refresh(booking)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return booking
 
 
@@ -193,4 +232,6 @@ async def cancel_booking(
     booking.status = BookingStatus.cancelled
     await db.commit()
     await db.refresh(booking)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return booking

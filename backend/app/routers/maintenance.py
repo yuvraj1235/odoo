@@ -9,11 +9,12 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    ActivityLog, Asset, AssetStatus, MaintenanceRequest, MaintenanceStatus,
-    User, UserRole
+    ActivityLog, Asset, AssetStatus, MaintenancePriority, MaintenanceRequest,
+    MaintenanceStatus, SLAStatus, User, UserRole
 )
 from app.schemas import MaintenanceCreate, MaintenanceResponse, MaintenanceUpdate
 from app.security import CurrentUser, require_roles
+from app.cache import cache
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -23,6 +24,58 @@ _MR_LOAD = [
     selectinload(MaintenanceRequest.user),
     selectinload(MaintenanceRequest.assigned_to),
 ]
+
+
+SLA_HOURS = {
+    MaintenancePriority.critical: 2.0,
+    MaintenancePriority.high: 4.0,
+    MaintenancePriority.medium: 12.0,
+    MaintenancePriority.low: 24.0,
+}
+
+
+async def _check_and_update_sla(db: AsyncSession, mr: MaintenanceRequest) -> bool:
+    """Dynamic SLA Engine: Check elapsed time against matrix and trigger escalation logs."""
+    if mr.status in (MaintenanceStatus.resolved, MaintenanceStatus.rejected):
+        return False
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    elapsed_hours = (now - mr.created_at).total_seconds() / 3600.0
+    allowed_hours = SLA_HOURS.get(mr.priority, 12.0)
+
+    new_sla = SLAStatus.normal
+    if elapsed_hours >= allowed_hours:
+        new_sla = SLAStatus.breached
+    elif elapsed_hours >= allowed_hours * 0.75:
+        new_sla = SLAStatus.warning
+
+    if mr.sla_status != new_sla:
+        mr.sla_status = new_sla
+        if new_sla in (SLAStatus.warning, SLAStatus.breached):
+            action = "maintenance.sla_breached" if new_sla == SLAStatus.breached else "maintenance.sla_warning"
+            asset_tag = mr.asset.asset_tag if mr.asset else f"Asset #{mr.asset_id}"
+            details = {
+                "asset_id": mr.asset_id,
+                "asset_tag": asset_tag,
+                "priority": mr.priority.value,
+                "sla_status": new_sla.value,
+                "allowed_hours": allowed_hours,
+                "message": (
+                    f"⚠️ CRITICAL ALERT: Maintenance for Asset {asset_tag} has breached its {int(allowed_hours)}-hour resolution SLA"
+                    if new_sla == SLAStatus.breached else
+                    f"⚠️ WARNING: Maintenance for Asset {asset_tag} has crossed 75% of its {int(allowed_hours)}-hour resolution SLA"
+                )
+            }
+            log = ActivityLog(
+                user_id=mr.user_id,
+                action=action,
+                entity_type="maintenance",
+                entity_id=mr.id,
+                details=details,
+            )
+            db.add(log)
+        return True
+    return False
 
 
 @router.get("/", response_model=list[MaintenanceResponse])
@@ -40,7 +93,18 @@ async def list_requests(
     if current_user.role == UserRole.employee:
         q = q.where(MaintenanceRequest.user_id == current_user.id)
     result = await db.execute(q.order_by(MaintenanceRequest.created_at.desc()))
-    return result.scalars().all()
+    items = result.scalars().all()
+
+    # Run Dynamic Status Engine check across active tickets
+    changed = False
+    for mr in items:
+        if await _check_and_update_sla(db, mr):
+            changed = True
+    if changed:
+        await db.commit()
+        await cache.invalidate_pattern("analytics")
+        await cache.invalidate_pattern("ai:")
+    return items
 
 
 @router.post("/", response_model=MaintenanceResponse, status_code=201)
@@ -71,6 +135,8 @@ async def create_request(
     db.add(log)
     await db.commit()
     await db.refresh(mr)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
 
     result = await db.execute(
         select(MaintenanceRequest).options(*_MR_LOAD).where(MaintenanceRequest.id == mr.id)
@@ -125,6 +191,8 @@ async def update_request(
     db.add(log)
     await db.commit()
     await db.refresh(mr)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return mr
 
 
@@ -136,4 +204,8 @@ async def get_request(mr_id: int, db: DbDep, current_user: CurrentUser) -> Maint
     mr = result.scalar_one_or_none()
     if not mr:
         raise HTTPException(status_code=404, detail="Maintenance request not found")
+    if await _check_and_update_sla(db, mr):
+        await db.commit()
+        await cache.invalidate_pattern("analytics")
+        await cache.invalidate_pattern("ai:")
     return mr

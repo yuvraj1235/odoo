@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.schemas import AssetCreate, AssetResponse, AssetUpdate, AllocationResponse
 from app.security import CurrentUser, require_roles
+from app.cache import cache
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -114,6 +115,8 @@ async def create_asset(
     db.add(log)
     await db.commit()
     await db.refresh(asset)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return await _enrich(asset, db)
 
 
@@ -155,6 +158,8 @@ async def update_asset(
     db.add(log)
     await db.commit()
     await db.refresh(asset)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return await _enrich(asset, db)
 
 
@@ -170,6 +175,8 @@ async def delete_asset(
         raise HTTPException(status_code=404, detail="Asset not found")
     await db.delete(asset)
     await db.commit()
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
 
 
 @router.get("/{asset_id}/history", response_model=list[AllocationResponse])

@@ -1,0 +1,222 @@
+{
+  "backend/app/__init__.py": {
+    "mtime": 1783826235.777478,
+    "ast_hash": "12733ad537bf21185caddb0efb2bb16d",
+    "semantic_hash": "12733ad537bf21185caddb0efb2bb16d"
+  },
+  "backend/app/database.py": {
+    "mtime": 1783825836.7030454,
+    "ast_hash": "2a48e430e3e4a61e3034a16aaefa3421",
+    "semantic_hash": "2a48e430e3e4a61e3034a16aaefa3421"
+  },
+  "backend/app/main.py": {
+    "mtime": 1783826221.5354404,
+    "ast_hash": "8f8e5f439a0b06989af1cd582907f5c2",
+    "semantic_hash": "8f8e5f439a0b06989af1cd582907f5c2"
+  },
+  "backend/app/models.py": {
+    "mtime": 1783825883.449008,
+    "ast_hash": "045f0addea59d36b7f81132e44910d09",
+    "semantic_hash": "045f0addea59d36b7f81132e44910d09"
+  },
+  "backend/app/routers/__init__.py": {
+    "mtime": 1783826229.8384693,
+    "ast_hash": "168c4dcf47c223f1c384a765453b4c94",
+    "semantic_hash": "168c4dcf47c223f1c384a765453b4c94"
+  },
+  "backend/app/routers/allocations.py": {
+    "mtime": 1783826089.8262582,
+    "ast_hash": "af761a48c0299209a43e39cf4028f37c",
+    "semantic_hash": "af761a48c0299209a43e39cf4028f37c"
+  },
+  "backend/app/routers/analytics.py": {
+    "mtime": 1783826191.6451485,
+    "ast_hash": "0cea7df6305d743b3de72bfc3c4c058d",
+    "semantic_hash": "0cea7df6305d743b3de72bfc3c4c058d"
+  },
+  "backend/app/routers/assets.py": {
+    "mtime": 1783840284.4340932,
+    "ast_hash": "322d2b15b746ba6f58b232d9c95ef4dd",
+    "semantic_hash": "322d2b15b746ba6f58b232d9c95ef4dd"
+  },
+  "backend/app/routers/audits.py": {
+    "mtime": 1783826163.5868747,
+    "ast_hash": "b7506bf4f707c51547ba49c9494a2af2",
+    "semantic_hash": "b7506bf4f707c51547ba49c9494a2af2"
+  },
+  "backend/app/routers/auth.py": {
+    "mtime": 1783825985.099045,
+    "ast_hash": "4bbe619f11954d13142eaa5e20f2bc4f",
+    "semantic_hash": "4bbe619f11954d13142eaa5e20f2bc4f"
+  },
+  "backend/app/routers/bookings.py": {
+    "mtime": 1783826115.689407,
+    "ast_hash": "49597842f8316f44c095147f9e4930a7",
+    "semantic_hash": "49597842f8316f44c095147f9e4930a7"
+  },
+  "backend/app/routers/categories.py": {
+    "mtime": 1783826029.132061,
+    "ast_hash": "126de9c1f54c20aa08f8193156901f4c",
+    "semantic_hash": "126de9c1f54c20aa08f8193156901f4c"
+  },
+  "backend/app/routers/departments.py": {
+    "mtime": 1783826015.0000558,
+    "ast_hash": "a767a98fb313dc3c5e554d89a873376f",
+    "semantic_hash": "a767a98fb313dc3c5e554d89a873376f"
+  },
+  "backend/app/routers/logs.py": {
+    "mtime": 1783826210.1793296,
+    "ast_hash": "26c4aa9ef92d5896ad5dae54c442fa2f",
+    "semantic_hash": "26c4aa9ef92d5896ad5dae54c442fa2f"
+  },
+  "backend/app/routers/maintenance.py": {
+    "mtime": 1783826138.5406303,
+    "ast_hash": "40ab17304a906e8114c2712b7ad97f6d",
+    "semantic_hash": "40ab17304a906e8114c2712b7ad97f6d"
+  },
+  "backend/app/routers/users.py": {
+    "mtime": 1783826001.0730507,
+    "ast_hash": "daddd30cf4a023e4676945cd9149bf24",
+    "semantic_hash": "daddd30cf4a023e4676945cd9149bf24"
+  },
+  "backend/app/schemas.py": {
+    "mtime": 1783827150.0015686,
+    "ast_hash": "927cee6eccb5b01f464e7cb3d13a0c18",
+    "semantic_hash": "927cee6eccb5b01f464e7cb3d13a0c18"
+  },
+  "backend/app/security.py": {
+    "mtime": 1783825898.8510137,
+    "ast_hash": "6518ae549f2c55b9aac2cdea65dc6620",
+    "semantic_hash": "6518ae549f2c55b9aac2cdea65dc6620"
+  },
+  "backend/app/seed.py": {
+    "mtime": 1783828624.9031775,
+    "ast_hash": "ff0ec54c8dad83cb78b6d39174953f88",
+    "semantic_hash": "ff0ec54c8dad83cb78b6d39174953f88"
+  },
+  "backend/run.py": {
+    "mtime": 1783827107.7784889,
+    "ast_hash": "e2a36fbfe6f5a131369963139b1cdde2",
+    "semantic_hash": "e2a36fbfe6f5a131369963139b1cdde2"
+  },
+  "backend/test_error.py": {
+    "mtime": 1783840210.5399501,
+    "ast_hash": "34cec6a9caff5d7ea4ea8f79a36efd6c",
+    "semantic_hash": "34cec6a9caff5d7ea4ea8f79a36efd6c"
+  },
+  "frontend/.oxlintrc.json": {
+    "mtime": 1783826558.8696477,
+    "ast_hash": "029f4905006c1fffd96bc863e2d98d3e",
+    "semantic_hash": "029f4905006c1fffd96bc863e2d98d3e"
+  },
+  "frontend/package.json": {
+    "mtime": 1783826924.629998,
+    "ast_hash": "738859852b1c774e15842d034a597605",
+    "semantic_hash": "738859852b1c774e15842d034a597605"
+  },
+  "frontend/postcss.config.js": {
+    "mtime": 1783826926.081002,
+    "ast_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0",
+    "semantic_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0"
+  },
+  "frontend/src/App.tsx": {
+    "mtime": 1783837189.2495594,
+    "ast_hash": "8a2705e1da8cd38f487405dc70d0cd6a",
+    "semantic_hash": "8a2705e1da8cd38f487405dc70d0cd6a"
+  },
+  "frontend/src/api/client.ts": {
+    "mtime": 1783828153.348185,
+    "ast_hash": "9847abcbfe08182b460da4cb39d9ae24",
+    "semantic_hash": "9847abcbfe08182b460da4cb39d9ae24"
+  },
+  "frontend/src/components/layout/Layout.tsx": {
+    "mtime": 1783837830.2896595,
+    "ast_hash": "8d0cf3363819588b4d0f73fa27762daf",
+    "semantic_hash": "8d0cf3363819588b4d0f73fa27762daf"
+  },
+  "frontend/src/contexts/AuthContext.tsx": {
+    "mtime": 1783827019.795266,
+    "ast_hash": "3b4fad1784e14ead0454e0d2ca8b3389",
+    "semantic_hash": "3b4fad1784e14ead0454e0d2ca8b3389"
+  },
+  "frontend/src/main.tsx": {
+    "mtime": 1783827161.582607,
+    "ast_hash": "35d924fcff083bd02cfe5c446c6612f0",
+    "semantic_hash": "35d924fcff083bd02cfe5c446c6612f0"
+  },
+  "frontend/src/pages/ActivityLogs.tsx": {
+    "mtime": 1783839079.7238405,
+    "ast_hash": "459e124ab7fbc12ee6934f63357cd626",
+    "semantic_hash": "459e124ab7fbc12ee6934f63357cd626"
+  },
+  "frontend/src/pages/Allocations.tsx": {
+    "mtime": 1783838606.0870879,
+    "ast_hash": "a8661a4a5c89414d58ac9faf0b0b19f7",
+    "semantic_hash": "a8661a4a5c89414d58ac9faf0b0b19f7"
+  },
+  "frontend/src/pages/Assets.tsx": {
+    "mtime": 1783840497.0265052,
+    "ast_hash": "c8e93dedac812de00da75364d7690677",
+    "semantic_hash": "c8e93dedac812de00da75364d7690677"
+  },
+  "frontend/src/pages/Audits.tsx": {
+    "mtime": 1783839007.2857192,
+    "ast_hash": "7501dc94990b7616e5cbd6c261ab4e84",
+    "semantic_hash": "7501dc94990b7616e5cbd6c261ab4e84"
+  },
+  "frontend/src/pages/Bookings.tsx": {
+    "mtime": 1783838644.9871492,
+    "ast_hash": "a591011fee3471d1d9489f3527e7f4c0",
+    "semantic_hash": "a591011fee3471d1d9489f3527e7f4c0"
+  },
+  "frontend/src/pages/Dashboard.tsx": {
+    "mtime": 1783837077.431359,
+    "ast_hash": "bdac08db864f3d784192772df3955a6c",
+    "semantic_hash": "bdac08db864f3d784192772df3955a6c"
+  },
+  "frontend/src/pages/Login.tsx": {
+    "mtime": 1783837026.1272757,
+    "ast_hash": "043dc7b86934b65b199c03c50cbf8071",
+    "semantic_hash": "043dc7b86934b65b199c03c50cbf8071"
+  },
+  "frontend/src/pages/Maintenance.tsx": {
+    "mtime": 1783838957.3156404,
+    "ast_hash": "520715acf1e3fdfa4fc3554e28094b83",
+    "semantic_hash": "520715acf1e3fdfa4fc3554e28094b83"
+  },
+  "frontend/src/pages/OrgSetup.tsx": {
+    "mtime": 1783835752.8617132,
+    "ast_hash": "0538f27cb0f2f380e14f32c20e8c86af",
+    "semantic_hash": "0538f27cb0f2f380e14f32c20e8c86af"
+  },
+  "frontend/src/pages/Reports.tsx": {
+    "mtime": 1783839049.070788,
+    "ast_hash": "e7c2d25650cd84c6ce68d7713f54521b",
+    "semantic_hash": "e7c2d25650cd84c6ce68d7713f54521b"
+  },
+  "frontend/tailwind.config.js": {
+    "mtime": 1783836902.7321103,
+    "ast_hash": "67306597598c9eb36b232b94ee5bdcfa",
+    "semantic_hash": "67306597598c9eb36b232b94ee5bdcfa"
+  },
+  "frontend/tsconfig.app.json": {
+    "mtime": 1783826558.8785086,
+    "ast_hash": "5f2dafd737dea8a4ddcbb10f5113ac5a",
+    "semantic_hash": "5f2dafd737dea8a4ddcbb10f5113ac5a"
+  },
+  "frontend/tsconfig.json": {
+    "mtime": 1783826558.8787675,
+    "ast_hash": "a3d39fa780ebff65444de257f291ce6c",
+    "semantic_hash": "a3d39fa780ebff65444de257f291ce6c"
+  },
+  "frontend/tsconfig.node.json": {
+    "mtime": 1783826558.878958,
+    "ast_hash": "f9cb81ddcea69ffdab672fc8c48dca66",
+    "semantic_hash": "f9cb81ddcea69ffdab672fc8c48dca66"
+  },
+  "frontend/vite.config.ts": {
+    "mtime": 1783829258.9771366,
+    "ast_hash": "0004ff6c693e16e8dc6008261379c014",
+    "semantic_hash": "0004ff6c693e16e8dc6008261379c014"
+  }
+}

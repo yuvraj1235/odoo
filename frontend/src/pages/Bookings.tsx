@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  CalendarClock, Calendar, AlertTriangle, 
-  Loader2, Clock, CheckCircle2
+  CalendarClock, AlertTriangle, 
+  Loader2, CheckCircle2, Sparkles, ArrowRight
 } from 'lucide-react';
-import { format, parseISO, startOfDay, endOfDay, isSameDay, getHours, getMinutes, addHours, differenceInMinutes, parse, isBefore, isAfter } from 'date-fns';
+import { format, parseISO, isSameDay, getHours, getMinutes, parse, isBefore, isAfter } from 'date-fns';
 
 interface Asset {
   id: number;
@@ -24,7 +24,7 @@ interface Booking {
 }
 
 export default function Bookings() {
-  const { user } = useAuth();
+  useAuth();
   const [bookableAssets, setBookableAssets] = useState<Asset[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState<number | ''>('');
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -37,6 +37,7 @@ export default function Bookings() {
   const [purpose, setPurpose] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [conflictData, setConflictData] = useState<any>(null);
 
   // Fetch bookable assets
   useEffect(() => {
@@ -132,6 +133,7 @@ export default function Bookings() {
     if (isOverlapping || !selectedAssetId) return;
     setSubmitting(true);
     setSuccessMsg('');
+    setConflictData(null);
 
     try {
       const startIso = parse(`${selectedDate} ${startTime}`, 'yyyy-MM-dd HH:mm', new Date()).toISOString();
@@ -153,8 +155,42 @@ export default function Bookings() {
         b.status !== 'cancelled'
       );
       setBookings(dayBookings);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to book', err);
+      if (err.response?.status === 409 && err.response.data?.detail?.recommendations) {
+        setConflictData(err.response.data.detail);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSmartSwap = async (targetAssetId: number) => {
+    setSelectedAssetId(targetAssetId);
+    setConflictData(null);
+    setSubmitting(true);
+    setSuccessMsg('');
+    try {
+      const startIso = parse(`${selectedDate} ${startTime}`, 'yyyy-MM-dd HH:mm', new Date()).toISOString();
+      const endIso = parse(`${selectedDate} ${endTime}`, 'yyyy-MM-dd HH:mm', new Date()).toISOString();
+
+      await api.post('/bookings/', {
+        asset_id: targetAssetId,
+        start_time: startIso,
+        end_time: endIso,
+        notes: purpose || 'Smart Swap booking'
+      });
+      setSuccessMsg('Resource booked via Smart Swap recommendation!');
+      setPurpose('');
+      
+      const res = await api.get(`/bookings/?asset_id=${targetAssetId}`);
+      const dayBookings = res.data.filter((b: Booking) => 
+        isSameDay(parseISO(b.start_time), parseISO(selectedDate)) &&
+        b.status !== 'cancelled'
+      );
+      setBookings(dayBookings);
+    } catch (err) {
+      console.error('Failed to book alternative', err);
     } finally {
       setSubmitting(false);
     }
@@ -243,6 +279,47 @@ export default function Bookings() {
                 <div className="p-3 bg-successLight text-success text-sm font-medium rounded-xl flex items-center gap-2">
                   <CheckCircle2 size={16} />
                   {successMsg}
+                </div>
+              )}
+
+              {conflictData && (
+                <div className="p-4 bg-danger/10 border border-danger/30 rounded-xl space-y-3 animate-fade-in">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-bold text-danger">Slot Unavailable</h4>
+                      <p className="text-xs text-textSecondary mt-0.5">
+                        {conflictData.conflicting_booking?.team || 'Another team'} has booked this slot from {conflictData.conflicting_booking?.time || 'requested time'}.
+                      </p>
+                    </div>
+                  </div>
+
+                  {conflictData.recommendations && conflictData.recommendations.length > 0 && (
+                    <div className="pt-2 border-t border-danger/20">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-accent mb-2">
+                        <Sparkles size={14} className="animate-spin" />
+                        <span>Smart Swap Recommendations (Free now)</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {conflictData.recommendations.map((rec: any) => (
+                          <button
+                            key={rec.id}
+                            type="button"
+                            onClick={() => handleSmartSwap(rec.id)}
+                            className="w-full flex items-center justify-between p-2 bg-surfaceHover hover:bg-accentLight/40 rounded-lg text-left transition-colors group border border-borderBase/60"
+                          >
+                            <div className="truncate pr-2">
+                              <span className="font-mono text-[11px] font-bold text-accent mr-1.5">{rec.resource_id}</span>
+                              <span className="text-xs font-semibold text-textPrimary">{rec.name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-accent group-hover:translate-x-1 transition-transform flex items-center gap-0.5 shrink-0">
+                              Swap & Book <ArrowRight size={12} />
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

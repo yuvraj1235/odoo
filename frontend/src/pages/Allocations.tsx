@@ -30,7 +30,7 @@ interface AllocationHistory {
 }
 
 export default function Allocations() {
-  const { user } = useAuth();
+  useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [usersList, setUsersList] = useState<User[]>([]);
   

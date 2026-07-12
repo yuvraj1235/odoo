@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import (
-    Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, Enum as SAEnum
+    Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, Enum as SAEnum
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -65,6 +65,13 @@ class MaintenancePriority(str, enum.Enum):
     low = "low"
     medium = "medium"
     high = "high"
+    critical = "critical"
+
+
+class SLAStatus(str, enum.Enum):
+    normal = "normal"
+    warning = "warning"
+    breached = "breached"
 
 
 class MaintenanceStatus(str, enum.Enum):
@@ -173,6 +180,9 @@ class AssetCategory(Base):
 
 class Asset(Base):
     __tablename__ = "assets"
+    __table_args__ = (
+        Index("ix_assets_category_status_location", "category_id", "status", "location"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -221,6 +231,9 @@ class Asset(Base):
 
 class Allocation(Base):
     __tablename__ = "allocations"
+    __table_args__ = (
+        Index("ix_allocations_asset_user", "asset_id", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     asset_id: Mapped[int] = mapped_column(Integer, ForeignKey("assets.id"), nullable=False)
@@ -270,6 +283,9 @@ class TransferRequest(Base):
 
 class Booking(Base):
     __tablename__ = "bookings"
+    __table_args__ = (
+        Index("ix_bookings_asset_time", "asset_id", "start_time", "end_time"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     asset_id: Mapped[int] = mapped_column(Integer, ForeignKey("assets.id"), nullable=False)
@@ -301,6 +317,9 @@ class MaintenanceRequest(Base):
     )
     status: Mapped[MaintenanceStatus] = mapped_column(
         SAEnum(MaintenanceStatus), default=MaintenanceStatus.pending
+    )
+    sla_status: Mapped[SLAStatus] = mapped_column(
+        SAEnum(SLAStatus), default=SLAStatus.normal
     )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

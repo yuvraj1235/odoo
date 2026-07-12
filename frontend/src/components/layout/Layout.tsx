@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Boxes, LayoutDashboard, Building2, PackageSearch,
   ArrowRightLeft, CalendarClock, Wrench, ShieldCheck,
   LineChart, ScrollText, LogOut, Menu, X, ChevronRight,
-  Bell
+  Bell, Sparkles, Command
 } from 'lucide-react';
+import CommandPalette from '../CommandPalette';
 
 const navItems = [
   { path: '/',             label: 'Dashboard',     icon: LayoutDashboard },
@@ -211,6 +212,19 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       {/* Right: actions */}
       <div className="flex items-center gap-2">
         <button
+          onClick={() => {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+          }}
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-textMuted hover:text-textPrimary bg-surfaceHover hover:bg-accentLight/30 rounded-xl border border-borderBase hover:border-accent/40 transition-all group"
+          title="Ask AI (Ctrl+K)"
+        >
+          <Sparkles size={14} className="text-accent group-hover:animate-pulse" />
+          <span>Ask AI</span>
+          <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-mono font-semibold text-textDisabled bg-surface rounded border border-borderBase">
+            <Command size={8} />K
+          </kbd>
+        </button>
+        <button
           className="p-2 text-textMuted hover:text-textPrimary hover:bg-surfaceHover rounded-xl transition-colors relative"
           aria-label="Notifications"
         >
@@ -253,6 +267,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <CommandPalette />
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../api/client';
 import { 
-  BarChart3, Activity, DollarSign, Package, 
-  Building2, Download, RefreshCw, FileText
+  BarChart3, Activity, Download, RefreshCw, FileText,
+  Sparkles, CheckCircle2, Loader2, Wrench, ShieldAlert
 } from 'lucide-react';
 
 interface DeptAllocation {
@@ -22,28 +22,64 @@ interface MaintenanceByCategory {
   count: number;
 }
 
+interface PredictiveAssetRisk {
+  asset_id: number;
+  asset_name: string;
+  asset_tag: string;
+  category_name: string | null;
+  risk_score: number;
+  predictive_alert: boolean;
+  risk_factors: Record<string, number>;
+  last_maintenance_days: number | null;
+  total_booking_hours: number;
+  asset_age_days: number;
+}
+
 export default function Reports() {
   const [deptAllocation, setDeptAllocation] = useState<DeptAllocation[]>([]);
   const [utilization, setUtilization] = useState<UtilizationItem[]>([]);
   const [maintData, setMaintData] = useState<MaintenanceByCategory[]>([]);
+  const [predictiveRisks, setPredictiveRisks] = useState<PredictiveAssetRisk[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [schedulingId, setSchedulingId] = useState<number | null>(null);
+  const [scheduledSuccess, setScheduledSuccess] = useState<number | null>(null);
 
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const [deptRes, utilRes, maintRes] = await Promise.all([
+      const [deptRes, utilRes, maintRes, predRes] = await Promise.all([
         api.get('/analytics/department-allocation'),
         api.get('/analytics/utilization'),
-        api.get('/analytics/maintenance-by-category')
+        api.get('/analytics/maintenance-by-category'),
+        api.get('/ai/predictive-maintenance')
       ]);
       setDeptAllocation(deptRes.data);
       setUtilization(utilRes.data);
       setMaintData(maintRes.data);
+      setPredictiveRisks(predRes.data);
     } catch (err) {
       console.error('Failed to load analytical reports', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSchedulePreventive = async (item: PredictiveAssetRisk) => {
+    setSchedulingId(item.asset_id);
+    try {
+      await api.post('/maintenance/', {
+        asset_id: item.asset_id,
+        issue_description: `Preventive Maintenance Scheduled by AI Engine (Failure Risk Score: ${Math.round(item.risk_score * 100)}% | Risk Factors: Age ${item.asset_age_days}d, Maint Gap ${item.last_maintenance_days ?? 'N/A'}d, Runtime ${item.total_booking_hours}h)`,
+        priority: item.risk_score >= 0.80 ? 'critical' : 'high'
+      });
+      setScheduledSuccess(item.asset_id);
+      setTimeout(() => setScheduledSuccess(null), 4000);
+    } catch (err) {
+      console.error('Failed to schedule preventive maintenance', err);
+      alert('Failed to schedule maintenance ticket.');
+    } finally {
+      setSchedulingId(null);
     }
   };
 
@@ -188,6 +224,15 @@ export default function Reports() {
                   <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
                 </div>
               </div>
+              {maintData.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-borderBase flex flex-wrap gap-2">
+                  {maintData.map((cat, idx) => (
+                    <span key={idx} className="text-[11px] px-2.5 py-1 bg-surfaceHover rounded-lg text-textSecondary border border-borderBase font-medium">
+                      {cat.category_name}: <strong className="text-textPrimary ml-1">{cat.count}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>
@@ -226,25 +271,148 @@ export default function Reports() {
               </div>
             </div>
 
-            {/* Lifecycle Warnings */}
-            <div className="data-card p-6">
-              <h3 className="text-base font-semibold text-textPrimary mb-4 border-b border-borderBase pb-2">
-                Assets due for maintenance / nearing retirement
-              </h3>
-              <div className="space-y-3">
-                {retirementLedger.map((item, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${item.critical ? 'bg-dangerLight/40 border-danger/30' : 'bg-warningLight/40 border-warning/30'}`}>
-                    <FileText size={18} className={item.critical ? 'text-danger mt-0.5' : 'text-warning mt-0.5'} />
-                    <div>
-                      <div className="text-sm font-semibold text-textPrimary">
-                        {item.name} <span className="font-mono text-xs text-accent ml-1">{item.tag}</span>
+            {/* Lifecycle Warnings & AI Predictive Maintenance */}
+            <div className="data-card p-6 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4 border-b border-borderBase pb-2">
+                  <h3 className="text-base font-semibold text-textPrimary flex items-center gap-2">
+                    <Sparkles size={16} className="text-accent animate-pulse" />
+                    Predictive Maintenance Forecasting
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-textMuted px-2 py-0.5 rounded bg-surfaceHover border border-borderBase">
+                    AI Risk Engine
+                  </span>
+                </div>
+
+                <p className="text-xs text-textSecondary mb-4 leading-relaxed">
+                  Calculated Failure Risk Scores based on asset age, maintenance intervals, physical condition, and cumulative operational runtime.
+                </p>
+
+                <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                  {predictiveRisks.length > 0 ? (
+                    predictiveRisks.slice(0, 5).map((item) => {
+                      const riskPct = Math.round(item.risk_score * 100);
+                      const isHighRisk = item.predictive_alert || item.risk_score > 0.80;
+                      const isMediumRisk = !isHighRisk && item.risk_score > 0.45;
+                      const isSuccess = scheduledSuccess === item.asset_id;
+
+                      return (
+                        <div
+                          key={item.asset_id}
+                          className={`p-3.5 rounded-xl border transition-all ${
+                            isHighRisk
+                              ? 'bg-dangerLight/20 border-danger/40 shadow-[0_0_12px_rgba(239,68,68,0.08)]'
+                              : isMediumRisk
+                              ? 'bg-warningLight/20 border-warning/30'
+                              : 'bg-surfaceHover/50 border-borderBase/60'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm text-textPrimary">{item.asset_name}</span>
+                                <span className="font-mono text-[10px] font-bold text-accent bg-accentLight px-1.5 py-0.5 rounded">
+                                  {item.asset_tag}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px] text-textMuted mt-1">
+                                <span>Age: {item.asset_age_days}d</span>
+                                <span>•</span>
+                                <span>Runtime: {item.total_booking_hours}h</span>
+                                {item.last_maintenance_days !== null && (
+                                  <>
+                                    <span>•</span>
+                                    <span>Last Maint: {item.last_maintenance_days}d ago</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span
+                                className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${
+                                  isHighRisk
+                                    ? 'bg-danger text-white'
+                                    : isMediumRisk
+                                    ? 'bg-warning text-slateDark'
+                                    : 'bg-info/20 text-info font-medium'
+                                }`}
+                              >
+                                {riskPct}% Risk
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Linear progress metric bar */}
+                          <div className="w-full bg-surfaceCard rounded-full h-2 mb-3 overflow-hidden border border-borderBase/50">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ${
+                                isHighRisk
+                                  ? 'bg-gradient-to-r from-warning to-danger'
+                                  : isMediumRisk
+                                  ? 'bg-warning'
+                                  : 'bg-info'
+                              }`}
+                              style={{ width: `${riskPct}%` }}
+                            />
+                          </div>
+
+                          {/* Quick-action schedule button */}
+                          {(isHighRisk || isMediumRisk) && (
+                            <div className="flex items-center justify-between pt-1 border-t border-borderBase/40">
+                              <span className="text-[11px] font-medium text-textSecondary flex items-center gap-1">
+                                {isHighRisk && <ShieldAlert size={13} className="text-danger shrink-0" />}
+                                {isHighRisk ? 'Immediate preventive action advised' : 'Scheduled maintenance recommended'}
+                              </span>
+                              <button
+                                onClick={() => handleSchedulePreventive(item)}
+                                disabled={schedulingId === item.asset_id || isSuccess}
+                                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all ${
+                                  isSuccess
+                                    ? 'bg-successLight text-successDark border border-success/30'
+                                    : isHighRisk
+                                    ? 'bg-danger hover:bg-danger/90 text-white shadow-sm'
+                                    : 'btn-secondary text-[11px] py-1 px-2'
+                                }`}
+                              >
+                                {schedulingId === item.asset_id ? (
+                                  <>
+                                    <Loader2 size={12} className="animate-spin" />
+                                    <span>Scheduling...</span>
+                                  </>
+                                ) : isSuccess ? (
+                                  <>
+                                    <CheckCircle2 size={12} className="text-success" />
+                                    <span>Ticket Created!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Wrench size={12} />
+                                    <span>Schedule Preventive Maintenance</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    retirementLedger.map((item, i) => (
+                      <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${item.critical ? 'bg-dangerLight/40 border-danger/30' : 'bg-warningLight/40 border-warning/30'}`}>
+                        <FileText size={18} className={item.critical ? 'text-danger mt-0.5' : 'text-warning mt-0.5'} />
+                        <div>
+                          <div className="text-sm font-semibold text-textPrimary">
+                            {item.name} <span className="font-mono text-xs text-accent ml-1">{item.tag}</span>
+                          </div>
+                          <div className={`text-xs mt-1 ${item.critical ? 'text-danger font-medium' : 'text-warningDark'}`}>
+                            {item.warning}
+                          </div>
+                        </div>
                       </div>
-                      <div className={`text-xs mt-1 ${item.critical ? 'text-danger font-medium' : 'text-warningDark'}`}>
-                        {item.warning}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 

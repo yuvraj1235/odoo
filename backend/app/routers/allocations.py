@@ -17,6 +17,7 @@ from app.schemas import (
     TransferCreate, TransferResponse
 )
 from app.security import CurrentUser, require_roles
+from app.cache import cache
 
 router = APIRouter(prefix="/allocations", tags=["allocations"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -113,6 +114,8 @@ async def allocate_asset(
     db.add(log)
     await db.commit()
     await db.refresh(alloc)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
 
     result = await db.execute(
         select(Allocation).options(*_ALLOC_LOAD).where(Allocation.id == alloc.id)
@@ -159,6 +162,8 @@ async def return_asset(
     db.add(log)
     await db.commit()
     await db.refresh(alloc)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return alloc
 
 
@@ -268,6 +273,8 @@ async def approve_transfer(
     db.add(log)
     await db.commit()
     await db.refresh(transfer)
+    await cache.invalidate_pattern("analytics")
+    await cache.invalidate_pattern("ai:")
     return transfer
 
 

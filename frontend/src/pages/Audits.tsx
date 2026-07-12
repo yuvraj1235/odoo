@@ -121,7 +121,7 @@ export default function Audits() {
     ));
 
     try {
-      await api.put(`/audits/${selectedCycle.id}/items/${itemId}`, {
+      await api.patch(`/audits/${selectedCycle.id}/items/${itemId}`, {
         status: newStatus,
         notes: `Audited and marked ${newStatus}`
       });

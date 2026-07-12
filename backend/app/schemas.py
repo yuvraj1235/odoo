@@ -14,6 +14,7 @@ from app.models import (
     DepartmentStatus,
     MaintenancePriority,
     MaintenanceStatus,
+    SLAStatus,
     TransferStatus,
     UserRole,
 )
@@ -278,6 +279,7 @@ class MaintenanceResponse(BaseModel):
     issue_description: str
     priority: MaintenancePriority
     status: MaintenanceStatus
+    sla_status: SLAStatus
     resolution_notes: str | None
     created_at: datetime
     updated_at: datetime

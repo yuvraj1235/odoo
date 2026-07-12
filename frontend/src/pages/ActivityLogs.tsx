@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../api/client';
 import {
   RefreshCw, ShieldAlert, Info, Clock, 
   CheckCircle2, FileWarning, ArrowRightLeft, 
-  CalendarClock, Settings2, Laptop, UserCheck
+  CalendarClock, Settings2, UserCheck
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
@@ -14,6 +14,7 @@ interface ActivityLog {
   entity_type: string;
   entity_id: number | null;
   details: any;
+  ip_address?: string | null;
   created_at: string;
   user?: { full_name: string; email: string } | null;
 }
@@ -50,7 +51,9 @@ export default function ActivityLogs() {
           log.action.includes('damaged') || 
           log.action.includes('missing') || 
           log.action.includes('overdue') ||
-          log.action.includes('rejected')
+          log.action.includes('rejected') ||
+          log.action.includes('sla_') ||
+          log.action.includes('breached')
         );
       case 'approvals':
         return logs.filter(log => log.action.includes('approve'));
@@ -94,6 +97,14 @@ export default function ActivityLogs() {
       Icon = CalendarClock;
       iconColor = 'text-accent bg-accentLight/50';
       text = `Resource booked by ${log.user?.full_name || 'user'}`;
+    } else if (action === 'maintenance.sla_breached') {
+      Icon = ShieldAlert;
+      iconColor = 'text-danger bg-dangerLight/50 animate-pulse';
+      text = log.details?.message || `⚠️ CRITICAL ALERT: Maintenance for Asset ${log.details?.asset_tag || '#' + log.entity_id} has breached its resolution SLA`;
+    } else if (action === 'maintenance.sla_warning') {
+      Icon = Clock;
+      iconColor = 'text-warning bg-warningLight/50';
+      text = log.details?.message || `⚠️ WARNING: Maintenance for Asset ${log.details?.asset_tag || '#' + log.entity_id} is nearing its resolution SLA window`;
     } else if (action.includes('discrepancy') || action.includes('damaged') || action.includes('missing')) {
       Icon = FileWarning;
       iconColor = 'text-danger bg-dangerLight/50';

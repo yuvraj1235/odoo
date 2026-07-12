@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, field_validator, model_config
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from app.models import (
     AllocationStatus,
@@ -22,7 +22,7 @@ from app.models import (
 # ─── Auth ────────────────────────────────────────────────────────────────────
 
 class SignupRequest(BaseModel):
-    model_config = model_config(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True)
     email: EmailStr
     password: str
     full_name: str
@@ -44,7 +44,7 @@ class TokenResponse(BaseModel):
 # ─── User ─────────────────────────────────────────────────────────────────────
 
 class UserResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     email: str
     full_name: str
@@ -82,7 +82,7 @@ class DepartmentUpdate(BaseModel):
 
 
 class DepartmentResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     status: DepartmentStatus
@@ -107,7 +107,7 @@ class CategoryUpdate(BaseModel):
 
 
 class CategoryResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     description: str | None
@@ -145,7 +145,7 @@ class AssetUpdate(BaseModel):
 
 
 class AssetResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     asset_tag: str
@@ -176,7 +176,7 @@ class AllocationCreate(BaseModel):
 
 
 class AllocationResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     asset_id: int
     user_id: int
@@ -203,7 +203,7 @@ class TransferCreate(BaseModel):
 
 
 class TransferResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     asset_id: int
     from_user_id: int
@@ -241,7 +241,7 @@ class BookingUpdate(BaseModel):
 
 
 class BookingResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     asset_id: int
     user_id: int
@@ -270,7 +270,7 @@ class MaintenanceUpdate(BaseModel):
 
 
 class MaintenanceResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     asset_id: int
     user_id: int
@@ -304,7 +304,7 @@ class AuditItemUpdate(BaseModel):
 
 
 class AuditItemResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     audit_cycle_id: int
     asset_id: int
@@ -317,7 +317,7 @@ class AuditItemResponse(BaseModel):
 
 
 class AuditCycleResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     department_id: int | None
@@ -370,7 +370,7 @@ class BookingHeatmapItem(BaseModel):
 # ─── Activity Log ────────────────────────────────────────────────────────────
 
 class ActivityLogResponse(BaseModel):
-    model_config = model_config(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
     id: int
     user_id: int | None
     action: str

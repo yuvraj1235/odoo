@@ -21,8 +21,8 @@ def utcnow() -> datetime:
 async def seed_database(db: AsyncSession) -> None:
     """Seed the database with initial data if empty."""
     # Check if already seeded
-    result = await db.execute(select(User))
-    if result.scalar_one_or_none():
+    result = await db.execute(select(User).limit(1))
+    if result.scalars().first():
         return
 
     # ── Departments ──────────────────────────────────────────────────────────

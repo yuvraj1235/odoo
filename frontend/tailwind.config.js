@@ -20,7 +20,7 @@ export default {
         success: '#10B981',
         warning: '#F59E0B',
         danger: '#EF4444',
-        slate: '#64748B',
+        baseSlate: '#64748B',
         slateDark: '#334155',
         slateLight: '#94A3B8',
         white: '#FFFFFF',

@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    ActivityLog, Asset, AssetStatus, Booking, BookingStatus, User, UserRole
+    ActivityLog, Asset, AssetStatus, Booking, BookingStatus, Department, User, UserRole
 )
 from app.schemas import BookingCreate, BookingResponse, BookingUpdate
 from app.security import CurrentUser, require_roles
@@ -19,7 +19,10 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 _BOOKING_LOAD = [
-    selectinload(Booking.asset).selectinload(Asset.category),
+    selectinload(Booking.asset).options(
+        selectinload(Asset.category),
+        selectinload(Asset.department).selectinload(Department.head),
+    ),
     selectinload(Booking.user),
 ]
 

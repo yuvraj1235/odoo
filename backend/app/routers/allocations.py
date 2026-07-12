@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models import (
     ActivityLog, Allocation, AllocationStatus, Asset, AssetStatus,
-    TransferRequest, TransferStatus, User, UserRole
+    Department, TransferRequest, TransferStatus, User, UserRole
 )
 from app.schemas import (
     AllocationCreate, AllocationResponse, ReturnRequest,
@@ -23,12 +23,18 @@ router = APIRouter(prefix="/allocations", tags=["allocations"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 _ALLOC_LOAD = [
-    selectinload(Allocation.asset).selectinload(Asset.category),
+    selectinload(Allocation.asset).options(
+        selectinload(Asset.category),
+        selectinload(Asset.department).selectinload(Department.head),
+    ),
     selectinload(Allocation.user),
 ]
 
 _TRANSFER_LOAD = [
-    selectinload(TransferRequest.asset).selectinload(Asset.category),
+    selectinload(TransferRequest.asset).options(
+        selectinload(Asset.category),
+        selectinload(Asset.department).selectinload(Department.head),
+    ),
     selectinload(TransferRequest.from_user),
     selectinload(TransferRequest.to_user),
 ]

@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models import (
     ActivityLog, Asset, AssetStatus, AuditCycle, AuditCycleStatus,
-    AuditItem, AuditItemStatus, User, UserRole
+    AuditItem, AuditItemStatus, Department, User, UserRole
 )
 from app.schemas import (
     AuditCycleCreate, AuditCycleResponse, AuditItemResponse, AuditItemUpdate
@@ -23,7 +23,10 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 _CYCLE_LOAD = [
     selectinload(AuditCycle.department),
     selectinload(AuditCycle.created_by),
-    selectinload(AuditCycle.items).selectinload(AuditItem.asset).selectinload(Asset.category),
+    selectinload(AuditCycle.items).selectinload(AuditItem.asset).options(
+        selectinload(Asset.category),
+        selectinload(Asset.department).selectinload(Department.head),
+    ),
     selectinload(AuditCycle.items).selectinload(AuditItem.auditor),
 ]
 
@@ -112,7 +115,10 @@ async def update_audit_item(
     result = await db.execute(
         select(AuditItem)
         .options(
-            selectinload(AuditItem.asset).selectinload(Asset.category),
+            selectinload(AuditItem.asset).options(
+                selectinload(Asset.category),
+                selectinload(Asset.department).selectinload(Department.head),
+            ),
             selectinload(AuditItem.auditor),
         )
         .where(AuditItem.id == item_id, AuditItem.audit_cycle_id == cycle_id)

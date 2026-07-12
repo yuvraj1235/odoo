@@ -1,4 +1,4 @@
-# ⚡ AssetFlow Enterprise
+# ⚡ AssetFlow Odoo Hackathon
 
 <div align="center">
   <h3><strong>Intelligent Hardware Lifecycle & Shared Resource Governance Platform</strong></h3>

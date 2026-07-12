@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import (
-    ActivityLog, Asset, AssetStatus, MaintenancePriority, MaintenanceRequest,
+    ActivityLog, Asset, AssetStatus, Department, MaintenancePriority, MaintenanceRequest,
     MaintenanceStatus, SLAStatus, User, UserRole
 )
 from app.schemas import MaintenanceCreate, MaintenanceResponse, MaintenanceUpdate
@@ -20,7 +20,10 @@ router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 _MR_LOAD = [
-    selectinload(MaintenanceRequest.asset).selectinload(Asset.category),
+    selectinload(MaintenanceRequest.asset).options(
+        selectinload(Asset.category),
+        selectinload(Asset.department).selectinload(Department.head),
+    ),
     selectinload(MaintenanceRequest.user),
     selectinload(MaintenanceRequest.assigned_to),
 ]

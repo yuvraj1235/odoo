@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -18,35 +19,42 @@ export default {
         navBorder: 'rgba(255,255,255,0.07)',
 
         // Page backgrounds
-        surface: '#F5F7FA',
-        surfaceCard: '#FFFFFF',
-        surfaceHover: '#EFF2F6',
+        surface: 'rgb(var(--rgb-surface) / <alpha-value>)',
+        surfaceCard: 'rgb(var(--rgb-surface-card) / <alpha-value>)',
+        surfaceHover: 'rgb(var(--rgb-surface-hover) / <alpha-value>)',
 
         // Brand accent — vivid indigo-blue
-        accent: '#4F6EF7',
-        accentHover: '#3B57E8',
-        accentLight: '#EEF1FF',
-        accentMuted: 'rgba(79,110,247,0.12)',
+        accent: 'rgb(var(--rgb-accent) / <alpha-value>)',
+        accentHover: 'rgb(var(--rgb-accent-hover) / <alpha-value>)',
+        accentLight: 'rgb(var(--rgb-accent-light) / <alpha-value>)',
+        accentMuted: 'rgba(var(--rgb-accent), 0.15)',
 
         // Semantic
         success: '#10B981',
         successLight: '#ECFDF5',
+        successDark: '#047857',
         warning: '#F59E0B',
         warningLight: '#FFFBEB',
+        warningDark: '#B45309',
         danger: '#EF4444',
         dangerLight: '#FEF2F2',
+        dangerDark: '#B91C1C',
         info: '#0EA5E9',
         infoLight: '#F0F9FF',
 
+        // Slate / Dark
+        slateDark: '#0F172A',
+        slateDarkHover: '#1E293B',
+
         // Text hierarchy
-        textPrimary: '#111827',
-        textSecondary: '#4B5563',
-        textMuted: '#9CA3AF',
-        textDisabled: '#D1D5DB',
+        textPrimary: 'rgb(var(--rgb-text-primary) / <alpha-value>)',
+        textSecondary: 'rgb(var(--rgb-text-secondary) / <alpha-value>)',
+        textMuted: 'rgb(var(--rgb-text-muted) / <alpha-value>)',
+        textDisabled: 'rgb(var(--rgb-text-disabled) / <alpha-value>)',
 
         // Borders
-        borderBase: '#E5E7EB',
-        borderStrong: '#D1D5DB',
+        borderBase: 'rgb(var(--rgb-border-base) / <alpha-value>)',
+        borderStrong: 'rgb(var(--rgb-border-strong) / <alpha-value>)',
       },
       boxShadow: {
         'xs':    '0 1px 2px 0 rgba(0,0,0,0.05)',

@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Boxes, LayoutDashboard, Building2, PackageSearch,
   ArrowRightLeft, CalendarClock, Wrench, ShieldCheck,
   LineChart, ScrollText, LogOut, Menu, X, ChevronRight,
-  Bell, Sparkles, Command
+  Bell, Sparkles, Command, Sun, Moon
 } from 'lucide-react';
 import CommandPalette from '../CommandPalette';
 
@@ -176,6 +176,23 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
   const title = PAGE_TITLES[location.pathname] ?? 'AssetFlow';
   const crumbs = location.pathname.split('/').filter(Boolean);
 
+  const [isDark, setIsDark] = useState(() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+    return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDark]);
+
   return (
     <header
       className="h-[60px] bg-surfaceCard border-b border-borderBase
@@ -225,6 +242,14 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
           </kbd>
         </button>
         <button
+          onClick={() => setIsDark(!isDark)}
+          className="p-2 text-textMuted hover:text-textPrimary hover:bg-surfaceHover rounded-xl transition-colors relative"
+          aria-label="Toggle dark mode"
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          {isDark ? <Sun size={18} className="text-warning" /> : <Moon size={18} className="text-textSecondary" />}
+        </button>
+        <button
           className="p-2 text-textMuted hover:text-textPrimary hover:bg-surfaceHover rounded-xl transition-colors relative"
           aria-label="Notifications"
         >
@@ -253,7 +278,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-dvh bg-surface flex">
+    <div className="min-h-dvh bg-surface text-textPrimary flex transition-colors duration-200">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col lg:pl-64 min-w-0">

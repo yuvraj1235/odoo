@@ -156,9 +156,24 @@ export default function Bookings() {
       );
       setBookings(dayBookings);
     } catch (err: any) {
-      console.error('Failed to book', err);
-      if (err.response?.status === 409 && err.response.data?.detail?.recommendations) {
-        setConflictData(err.response.data.detail);
+      if (err.response?.status === 409) {
+        // Expected business validation conflict — display Smart Swap or conflict banner gracefully
+        const detail = err.response.data?.detail;
+        setConflictData(typeof detail === 'object' ? detail : {
+          status: 'conflict',
+          message: typeof detail === 'string' ? detail : 'Resource is unavailable during this time window.',
+          conflicting_booking: { team: 'Existing Booking', time: `${startTime} - ${endTime}` }
+        });
+      } else if (err.response?.status === 400 || err.response?.status === 422) {
+        const detail = err.response.data?.detail;
+        const msg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail[0]?.msg : 'Invalid booking request or time range.';
+        setConflictData({
+          status: 'error',
+          message: msg,
+          conflicting_booking: null
+        });
+      } else {
+        console.error('Failed to book', err);
       }
     } finally {
       setSubmitting(false);
@@ -189,8 +204,25 @@ export default function Bookings() {
         b.status !== 'cancelled'
       );
       setBookings(dayBookings);
-    } catch (err) {
-      console.error('Failed to book alternative', err);
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        const detail = err.response.data?.detail;
+        setConflictData(typeof detail === 'object' ? detail : {
+          status: 'conflict',
+          message: 'This alternative resource was just booked by another user.',
+          conflicting_booking: { team: 'Another User', time: `${startTime} - ${endTime}` }
+        });
+      } else if (err.response?.status === 400 || err.response?.status === 422) {
+        const detail = err.response.data?.detail;
+        const msg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail[0]?.msg : 'Invalid booking request or time range.';
+        setConflictData({
+          status: 'error',
+          message: msg,
+          conflicting_booking: null
+        });
+      } else {
+        console.error('Failed to book alternative', err);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -320,6 +352,13 @@ export default function Bookings() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {isOverlapping && !conflictData && (
+                <div className="p-3 bg-warning/10 border border-warning/30 rounded-xl flex items-center gap-2 text-warning text-xs font-semibold animate-fade-in">
+                  <AlertTriangle size={15} className="shrink-0" />
+                  <span>Selected time range overlaps with an existing booking.</span>
                 </div>
               )}
 

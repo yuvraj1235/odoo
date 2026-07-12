@@ -87,12 +87,24 @@ export default function Reports() {
     fetchReports();
   }, []);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setExporting(true);
-    setTimeout(() => {
+    try {
+      const response = await api.get('/analytics/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `AssetFlow_Analytical_Report_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export report', err);
+      alert('Failed to export analytical report.');
+    } finally {
       setExporting(false);
-      alert('Mock report compiled and downloaded successfully.');
-    }, 1500);
+    }
   };
 
   // Mock data for line graph

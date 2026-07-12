@@ -22,11 +22,39 @@
   }
 
   :root {
+    --rgb-surface: 245 247 250;
+    --rgb-surface-card: 255 255 255;
+    --rgb-surface-hover: 239 242 246;
+    --rgb-accent: 79 110 247;
+    --rgb-accent-hover: 59 87 232;
+    --rgb-accent-light: 238 241 255;
+    --rgb-text-primary: 17 24 39;
+    --rgb-text-secondary: 75 85 99;
+    --rgb-text-muted: 107 114 128;
+    --rgb-text-disabled: 209 213 219;
+    --rgb-border-base: 229 231 235;
+    --rgb-border-strong: 209 213 219;
+
     --sidebar-width: 256px;
     --topbar-height: 60px;
     --radius: 0.625rem;
     --transition-fast: 150ms ease-out;
     --transition-base: 220ms ease-out;
+  }
+
+  .dark {
+    --rgb-surface: 11 17 32;
+    --rgb-surface-card: 19 29 51;
+    --rgb-surface-hover: 30 41 59;
+    --rgb-accent: 99 102 241;
+    --rgb-accent-hover: 129 140 248;
+    --rgb-accent-light: 30 41 59;
+    --rgb-text-primary: 248 250 252;
+    --rgb-text-secondary: 203 213 225;
+    --rgb-text-muted: 148 163 184;
+    --rgb-text-disabled: 71 85 105;
+    --rgb-border-base: 34 48 74;
+    --rgb-border-strong: 51 65 85;
   }
 
   html {

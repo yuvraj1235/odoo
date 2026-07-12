@@ -201,7 +201,7 @@ export default function Audits() {
             <button 
               onClick={handleCloseCycle}
               disabled={submitting}
-              className="btn-primary bg-white text-slateDark hover:bg-slate-100 border-none shadow-xl relative z-10 whitespace-nowrap"
+              className="px-4 py-2.5 rounded-xl font-bold text-sm bg-white text-slateDark hover:bg-slate-100 shadow-xl transition-all flex items-center gap-2 relative z-10 whitespace-nowrap"
             >
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />}
               Close Audit Cycle
@@ -249,28 +249,28 @@ export default function Audits() {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleVerifyItem(item.id, 'verified')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border-2 flex items-center gap-1
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-sm
                                 ${item.status === 'verified' 
-                                  ? 'bg-success/10 border-success text-success shadow-[0_0_10px_rgba(34,197,94,0.2)]' 
-                                  : 'border-borderBase text-textMuted hover:border-success/50 hover:text-success'}`}
+                                  ? 'bg-success text-white border-success shadow-[0_0_12px_rgba(16,185,129,0.35)]' 
+                                  : 'bg-surfaceCard border-borderStrong text-textPrimary hover:border-success hover:text-success hover:bg-success/10'}`}
                             >
                               <Check size={14} /> Verified
                             </button>
                             <button
                               onClick={() => handleVerifyItem(item.id, 'damaged')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border-2
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border shadow-sm
                                 ${item.status === 'damaged' 
-                                  ? 'bg-warning/10 border-warning text-warning shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
-                                  : 'border-borderBase text-textMuted hover:border-warning/50 hover:text-warning'}`}
+                                  ? 'bg-warning text-white border-warning shadow-[0_0_12px_rgba(245,158,11,0.35)]' 
+                                  : 'bg-surfaceCard border-borderStrong text-textPrimary hover:border-warning hover:text-warning hover:bg-warning/10'}`}
                             >
                               Damaged
                             </button>
                             <button
                               onClick={() => handleVerifyItem(item.id, 'missing')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border-2 flex items-center gap-1
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 shadow-sm
                                 ${item.status === 'missing' 
-                                  ? 'bg-danger/10 border-danger text-danger shadow-[0_0_10px_rgba(239,68,68,0.2)]' 
-                                  : 'border-borderBase text-textMuted hover:border-danger/50 hover:text-danger'}`}
+                                  ? 'bg-danger text-white border-danger shadow-[0_0_12px_rgba(239,68,68,0.35)]' 
+                                  : 'bg-surfaceCard border-borderStrong text-textPrimary hover:border-danger hover:text-danger hover:bg-danger/10'}`}
                             >
                               <X size={14} /> Missing
                             </button>
@@ -308,7 +308,7 @@ export default function Audits() {
         </div>
 
         {canManage && (
-          <button onClick={() => setIsModalOpen(true)} className="btn-primary self-start">
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary self-start font-bold shadow-md">
             <Plus size={16} />
             Start New Audit Cycle
           </button>
@@ -371,7 +371,7 @@ export default function Audits() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="text-accent hover:text-accentHover font-bold text-xs uppercase tracking-wider">
+                        <button className="px-3 py-1.5 rounded-xl bg-accent/10 text-accent hover:bg-accent hover:text-white font-bold text-xs uppercase tracking-wider transition-all">
                           Open →
                         </button>
                       </td>

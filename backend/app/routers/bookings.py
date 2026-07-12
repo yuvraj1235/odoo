@@ -58,8 +58,7 @@ async def _get_smart_recommendations(
     q = select(Asset).where(
         Asset.category_id == asset.category_id,
         Asset.id != asset.id,
-        Asset.is_bookable == True,
-        Asset.status == AssetStatus.available,
+        or_(Asset.is_bookable == True, Asset.status == AssetStatus.available),
     )
     result = await db.execute(q)
     alternatives = result.scalars().all()
@@ -114,8 +113,8 @@ async def create_booking(
     asset = asset_result.scalar_one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    if not asset.is_bookable:
-        raise HTTPException(status_code=400, detail="Asset is not bookable")
+    if not asset.is_bookable and asset.status != AssetStatus.available:
+        raise HTTPException(status_code=400, detail="Asset is not bookable or available")
 
     # Strict overlap validation with Smart Swap Recommendation Engine
     conflict = await _check_overlap(db, payload.asset_id, payload.start_time, payload.end_time)

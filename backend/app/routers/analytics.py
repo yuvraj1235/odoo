@@ -1,12 +1,13 @@
 """Analytics router — KPIs, utilization, heatmaps."""
 from datetime import datetime, timedelta, timezone
+import csv
+import io
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from typing import Annotated
-
-from fastapi import Depends
 
 from app.database import get_db
 from app.models import (
@@ -234,3 +235,93 @@ async def get_booking_heatmap(db: DbDep, current_user: CurrentUser) -> list[Book
     ]
     await cache.set("analytics:booking-heatmap", res, ttl_seconds=600)
     return res
+
+
+@router.get("/export")
+async def export_analytical_report(db: DbDep, current_user: CurrentUser) -> Response:
+    """Generate comprehensive CSV analytical report containing KPIs, allocations, maintenance, and asset ledger."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # 1. Title & Metadata
+    writer.writerow(["ASSETFLOW ENTERPRISE ANALYTICAL REPORT"])
+    writer.writerow([f"Generated At (UTC): {utcnow().isoformat()}"])
+    writer.writerow([f"Requested By: {current_user.email} ({current_user.role.value})"])
+    writer.writerow([])
+
+    # 2. KPI Summary
+    writer.writerow(["=== KPI SUMMARY ==="])
+    available = await db.execute(select(func.count()).select_from(Asset).where(Asset.status == AssetStatus.available))
+    allocated = await db.execute(select(func.count()).select_from(Asset).where(Asset.status == AssetStatus.allocated))
+    maint = await db.execute(select(func.count()).select_from(Asset).where(Asset.status == AssetStatus.under_maintenance))
+    total_assets = await db.execute(select(func.count()).select_from(Asset))
+    
+    writer.writerow(["Metric", "Count"])
+    writer.writerow(["Total Assets", total_assets.scalar() or 0])
+    writer.writerow(["Available Assets", available.scalar() or 0])
+    writer.writerow(["Allocated Assets", allocated.scalar() or 0])
+    writer.writerow(["Under Maintenance", maint.scalar() or 0])
+    writer.writerow([])
+
+    # 3. Department Allocations
+    writer.writerow(["=== DEPARTMENT ALLOCATIONS ==="])
+    writer.writerow(["Department Name", "Active Allocations Count"])
+    dept_result = await db.execute(
+        select(Department.name, func.count(Allocation.id).label("allocated_count"))
+        .join(Allocation, Department.id == Allocation.department_id)
+        .where(Allocation.status == AllocationStatus.active)
+        .group_by(Department.name)
+        .order_by(func.count(Allocation.id).desc())
+    )
+    for r in dept_result.all():
+        writer.writerow([r.name, r.allocated_count])
+    writer.writerow([])
+
+    # 4. Maintenance Tickets by Category
+    writer.writerow(["=== MAINTENANCE TICKETS BY CATEGORY ==="])
+    writer.writerow(["Category Name", "Total Tickets"])
+    maint_result = await db.execute(
+        select(AssetCategory.name, func.count(MaintenanceRequest.id).label("count"))
+        .join(Asset, AssetCategory.id == Asset.category_id)
+        .join(MaintenanceRequest, Asset.id == MaintenanceRequest.asset_id)
+        .group_by(AssetCategory.name)
+        .order_by(func.count(MaintenanceRequest.id).desc())
+    )
+    for r in maint_result.all():
+        writer.writerow([r.name, r.count])
+    writer.writerow([])
+
+    # 5. Full Asset Inventory Ledger
+    writer.writerow(["=== ASSET INVENTORY LEDGER ==="])
+    writer.writerow([
+        "Asset ID", "Asset Tag", "Asset Name", "Category", "Status", "Condition",
+        "Location", "Department", "Acquisition Date", "Acquisition Cost"
+    ])
+    assets_result = await db.execute(
+        select(Asset).options(
+            selectinload(Asset.category),
+            selectinload(Asset.department).selectinload(Department.head),
+        ).order_by(Asset.id)
+    )
+    for asset in assets_result.scalars().all():
+        writer.writerow([
+            asset.id,
+            asset.asset_tag,
+            asset.name,
+            asset.category.name if asset.category else "Uncategorized",
+            asset.status.value,
+            asset.condition.value,
+            asset.location or "N/A",
+            asset.department.name if asset.department else "Unassigned",
+            asset.acquisition_date.strftime("%Y-%m-%d") if asset.acquisition_date else "N/A",
+            f"${asset.acquisition_cost:.2f}" if asset.acquisition_cost is not None else "N/A",
+        ])
+
+    csv_content = output.getvalue()
+    filename = f"AssetFlow_Analytical_Report_{utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+

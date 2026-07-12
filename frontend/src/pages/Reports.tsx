@@ -184,24 +184,24 @@ export default function Reports() {
                 </h2>
               </div>
               <div className="flex-1 relative pb-6 px-2">
-                <svg className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                   {/* Grid lines */}
                   {[0, 0.33, 0.66, 1].map((ratio) => (
-                    <line key={ratio} x1="0" y1={`${ratio * 100}%`} x2="100%" y2={`${ratio * 100}%`} stroke="currentColor" strokeDasharray="4" className="text-borderBase/50" />
+                    <line key={ratio} x1="0" y1={ratio * 100} x2="100" y2={ratio * 100} stroke="currentColor" strokeDasharray="4" className="text-borderBase/50" />
                   ))}
                   
                   {/* Line path */}
                   <polyline 
                     fill="none" 
                     stroke="currentColor" 
-                    strokeWidth="3" 
+                    strokeWidth="2" 
                     className="text-accent drop-shadow-md"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     points={lineGraphPoints.map((val, idx) => {
                       const x = (idx / (lineGraphPoints.length - 1)) * 100;
                       const y = 100 - (val / maxLinePoint) * 100;
-                      return `${x}%,${y}%`;
+                      return `${x},${y}`;
                     }).join(' ')}
                   />
                   
@@ -212,9 +212,9 @@ export default function Reports() {
                     return (
                       <circle 
                         key={idx} 
-                        cx={`${x}%`} 
-                        cy={`${y}%`} 
-                        r="4" 
+                        cx={x} 
+                        cy={y} 
+                        r="2" 
                         className="fill-white stroke-accent stroke-2"
                       />
                     );

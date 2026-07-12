@@ -4,6 +4,14 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Assets from './pages/Assets';
+import Allocations from './pages/Allocations';
+import Bookings from './pages/Bookings';
+import Maintenance from './pages/Maintenance';
+import Audits from './pages/Audits';
+import Reports from './pages/Reports';
+import ActivityLogs from './pages/ActivityLogs';
+import OrgSetup from './pages/OrgSetup';
 
 function ProtectedRoute() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -29,14 +37,14 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/assets" element={<div>Directory</div>} />
-              <Route path="/allocations" element={<div>Allocations</div>} />
-              <Route path="/bookings" element={<div>Bookings</div>} />
-              <Route path="/maintenance" element={<div>Maintenance</div>} />
-              <Route path="/audits" element={<div>Audits</div>} />
-              <Route path="/reports" element={<div>Reports</div>} />
-              <Route path="/logs" element={<div>Activity Logs</div>} />
-              <Route path="/org-setup" element={<div>Org Setup</div>} />
+              <Route path="/assets" element={<Assets />} />
+              <Route path="/allocations" element={<Allocations />} />
+              <Route path="/bookings" element={<Bookings />} />
+              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/audits" element={<Audits />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/logs" element={<ActivityLogs />} />
+              <Route path="/org-setup" element={<OrgSetup />} />
             </Route>
           </Route>
         </Routes>

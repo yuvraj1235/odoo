@@ -193,6 +193,3 @@ assetflow/
 
 ---
 
-<div align="center">
-  <p><strong>Built with ❤️ by the AssetFlow Enterprise Engineering Team</strong></p>
-</div>

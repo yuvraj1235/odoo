@@ -14,7 +14,7 @@ interface ActivityLog {
   entity_id: number | null;
   details: any;
   ip_address: string | null;
-  timestamp: string;
+  created_at: string;
   user?: { full_name: string; email: string } | null;
 }
 
@@ -132,7 +132,7 @@ export default function ActivityLogs() {
                 {filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/60">
                     <td className="px-5 py-4 text-baseSlate whitespace-nowrap">
-                      {format(parseISO(log.timestamp), 'yyyy-MM-dd • HH:mm:ss')}
+                      {log.created_at || log.timestamp ? format(parseISO(log.created_at || log.timestamp), 'yyyy-MM-dd • HH:mm:ss') : 'N/A'}
                     </td>
                     <td className="px-5 py-4">
                       {getActionBadge(log.action)}

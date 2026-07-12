@@ -9,15 +9,19 @@ import { format, parseISO } from 'date-fns';
 
 interface AuditCycle {
   id: number;
-  title: string;
-  scope_type: string;
-  scope_id: number | null;
+  name?: string;
+  title?: string;
+  scope_type?: string;
+  scope_id?: number | null;
   status: 'planned' | 'in_progress' | 'closed';
-  start_date: string;
-  end_date: string | null;
-  total_items: number;
-  verified_items: number;
-  creator: { full_name: string; email: string };
+  date_from?: string;
+  start_date?: string;
+  date_to?: string | null;
+  end_date?: string | null;
+  total_items?: number;
+  verified_items?: number;
+  created_by?: { full_name: string; email: string };
+  creator?: { full_name: string; email: string };
 }
 
 interface AuditItem {
@@ -169,9 +173,9 @@ export default function Audits() {
                       }`}
                     >
                       <td className="px-5 py-4">
-                        <div className="font-medium text-nav">{c.title}</div>
+                        <div className="font-medium text-nav">{c.name || c.title}</div>
                         <div className="text-xs text-slateLight">
-                          Started: {format(parseISO(c.start_date), 'MMM d, yyyy')}
+                          Started: {c.date_from || c.start_date ? format(parseISO((c.date_from || c.start_date)!), 'MMM d, yyyy') : 'N/A'}
                         </div>
                       </td>
                       <td className="px-5 py-4 capitalize text-baseSlate">
@@ -219,7 +223,7 @@ export default function Audits() {
                 <span className="text-xs font-semibold uppercase tracking-wider text-accent block mb-0.5">
                   Audit Checklist Scope
                 </span>
-                <h3 className="font-semibold text-lg text-nav">{selectedCycle.title}</h3>
+                <h3 className="font-semibold text-lg text-nav">{selectedCycle.name || selectedCycle.title}</h3>
               </div>
               <button 
                 onClick={() => setSelectedCycle(null)}
